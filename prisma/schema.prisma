@@ -1,0 +1,208 @@
+generator client {
+    provider = "prisma-client-js"
+}
+
+datasource db {
+    provider = "postgresql"
+}
+
+model User {
+    id                       String           @id @default(uuid()) @map("id")
+    email                    String           @map("email")
+    username                 String           @unique @map("username")
+    displayPhotoKey          String?          @map("display_photo_key")
+    createdAt                DateTime         @default(now()) @map("created_at")
+    updatedAt                DateTime         @updatedAt @map("updated_at")
+    firstName                String?          @map("first_name")
+    lastName                 String?          @map("last_name")
+    password                 String           @map("password")
+    tenant                   Tenant           @map("tenant")
+    emailVerifiedAt          DateTime?        @map("email_verified_at")
+    require2Fa               Boolean          @default(false) @map("require_2fa")
+    requireEmailVerification Boolean          @default(false) @map("require_email_verification")
+    city                     String?          @map("city")
+    phone                    String?          @map("phone")
+    referralCode             String?          @map("referral_code")
+    dateOfBirth              DateTime?        @map("date_of_birth")
+    credentialStatus         CredentialStatus @default(ACTIVE) @map("credential_status")
+    passwordResetRequired    Boolean          @default(false) @map("password_reset_required")
+    twoFactorEnabled         Boolean          @default(false) @map("two_factor_enabled")
+    twoFactorSecret          String?          @map("two_factor_secret")
+    twoFactorMethod          String?          @map("two_factor_method")
+    lockedAt                 DateTime?        @map("locked_at")
+    deletedAt                DateTime?        @map("deleted_at")
+    suspendedAt              DateTime?        @map("suspend_at")
+    blockedAt                DateTime?        @map("blocked_at")
+    lockExpiresAt            DateTime?        @map("lock_expires_at")
+    pin                      String?
+    pinFailedAttempts        Int              @default(0) @map("pin_failed_attempts")
+    pinLockedUntil           DateTime?        @map("pin_locked_until")
+    backupCodes              BackupCode[]
+}
+
+model Admin {
+    id                       String           @id @default(uuid()) @map("id")
+    email                    String           @map("email")
+    password                 String           @map("password")
+    username                 String           @unique @map("username")
+    firstName                String?          @map("first_name")
+    lastName                 String?          @map("last_name")
+    phone                    String?          @map("phone")
+    createdAt                DateTime         @default(now()) @map("created_at")
+    updatedAt                DateTime         @updatedAt @map("updated_at")
+    role                     Role             @map("role")
+    tenant                   Tenant           @map("tenant")
+    emailVerifiedAt          DateTime?        @map("email_verified_at")
+    require2Fa               Boolean          @default(false) @map("require_2fa")
+    requireEmailVerification Boolean          @default(false) @map("require_email_verification")
+    credentialStatus         CredentialStatus @default(ACTIVE) @map("credential_status")
+    passwordResetRequired    Boolean          @default(false) @map("password_reset_required")
+    twoFactorEnabled         Boolean          @default(false) @map("two_factor_enabled")
+    twoFactorSecret          String?          @map("two_factor_secret")
+    twoFactorMethod          String?          @map("two_factor_method")
+    lockedAt                 DateTime?        @map("locked_at")
+    deletedAt                DateTime?        @map("deleted_at")
+    suspendedAt              DateTime?        @map("suspended_at")
+    blockedAt                DateTime?        @map("blocked_at")
+    lockExpiresAt            DateTime?        @map("lock_expires_at")
+    backupCodes              BackupCode[]
+}
+
+model BackupCode {
+    id        String   @id @default(uuid())
+    userId    String?
+    user      User?    @relation(fields: [userId], references: [id])
+    code      String
+    used      Boolean  @default(false)
+    createdAt DateTime @default(now())
+    admin     Admin?   @relation(fields: [adminId], references: [id])
+    adminId   String?
+}
+
+model Session {
+    id         String    @id @unique @map("id")
+    tokenHash  String    @unique @map("token_hash")
+    expiresAt  DateTime  @map("expires_at")
+    createdAt  DateTime  @default(now()) @map("created_at")
+    updatedAt  DateTime  @updatedAt @map("updated_at")
+    userId     String    @map("user_id")
+    deviceId   String    @map("device_id")
+    ipAddress  String?   @map("ip_address")
+    userAgent  String?   @map("user_agent")
+    lastSeenAt DateTime? @map("last_seen_at")
+    deviceName String?   @map("device_name")
+}
+
+model Intent {
+    id     String       @id @default(uuid())
+    userId String
+    type   IntentType
+    status IntentStatus @default(CREATED)
+
+    payload Json
+
+    meta Json?
+
+    requiredAuthMethods AuthorizationMethod[]
+    minAuthSatisfied    Int
+
+    authorizedAt DateTime?
+    expiresAt    DateTime
+
+    executedAt DateTime?
+    failedAt   DateTime?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    authorizationAttempts AuthorizationAttempt[]
+
+    @@index([userId])
+    @@index([status])
+    @@index([expiresAt])
+}
+
+model AuthorizationAttempt {
+    id          String                     @id @default(cuid())
+    intentId    String
+    method      AuthorizationMethod
+    status      AuthorizationAttemptStatus
+    attemptedAt DateTime                   @default(now())
+
+    /// Optional metadata (IP, device, etc.)
+    meta Json?
+
+    intent Intent @relation(fields: [intentId], references: [id], onDelete: Cascade)
+
+    @@index([intentId])
+    @@index([intentId, method])
+}
+
+model VerificationToken {
+    id        String    @id @default(uuid()) @map("id")
+    email     String?
+    userId    String?
+    token     String    @map("token")
+    type      TokenType @map("type")
+    createdAt DateTime  @default(now()) @map("created_at")
+    expiresAt DateTime  @map("expires_at")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  tenant    Tenant
+  type      String
+  title     String
+  message   String
+  metadata  Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+}
+
+enum AuthorizationAttemptStatus {
+    SUCCESS
+    FAILURE
+}
+
+enum IntentStatus {
+    CREATED
+    AUTHORIZED
+    EXECUTED
+    FAILED
+    EXPIRED
+}
+
+enum Tenant {
+    USER
+}
+
+enum CredentialStatus {
+    ACTIVE
+    SUSPENDED
+    LOCKED
+    DELETED
+    BLOCKED
+}
+
+enum Role {
+    ADMIN
+    SUPERADMIN
+}
+
+enum IntentType {
+    EMPTY
+}
+
+enum AuthorizationMethod {
+    PASSWORD
+    OTP
+    TOTP
+}
+
+enum TokenType {
+    EMAIL_VERIFICATION
+    PASSWORD_RESET
+}
