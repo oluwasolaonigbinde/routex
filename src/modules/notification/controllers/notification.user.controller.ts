@@ -15,7 +15,7 @@ import {
 } from '../entity/notifcation.entity';
 import { SerializeOptions } from '@/util/decorator';
 import { GetUserNotificationsDto } from '../dto/notification.user.dto';
-import { User as UserToken } from '@/modules/user/decorators/user';
+import { UserToken } from '@/decorators/user';
 
 @ApiTags('Notifications')
 @ApiBearerAuth()

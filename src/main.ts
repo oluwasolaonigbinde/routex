@@ -6,6 +6,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
 import { ActionRequiredFilter } from './common/filters/action-required.filter';
+import { writeFileSync } from 'fs';
 
 async function bootstrap() {
     const app = await NestFactory.create<NestExpressApplication>(AppModule);

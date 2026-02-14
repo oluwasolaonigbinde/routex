@@ -14,7 +14,6 @@ import {
     Param,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { User as UserToken } from './decorators/user';
 import { SessionListResponse } from '../auth/entities/auth.entity';
 import type { AccessTokenDTO, RefreshToken } from '@/types/auth';
 import { Public } from '../auth/decorators/public-route.decorator';
@@ -24,6 +23,7 @@ import {
     ResetPasswordDto,
     LoginDto,
     DeviceInfo,
+    VerifyEmailDto,
 } from '../auth/dto/auth.dto';
 import { RefreshTokenGuard } from '../auth/guard/refresh-auth.guard';
 import { Tenant } from '../auth/decorators/tenant.decorator';
@@ -38,7 +38,7 @@ import {
     ApiNotFoundResponse,
     ApiConsumes,
 } from '@nestjs/swagger';
-import { VerifyEmailDto, UpdateProfileDto, CreateUserDto } from './dto/dto';
+import { UpdateProfileDto, CreateUserDto } from './dto/dto';
 import {
     LoginUserResponse,
     UserPrivateEntityApiResponse,
@@ -51,6 +51,7 @@ import type { Request } from 'express';
 import { PaginatedQuery } from '@/util/dto';
 import { SessionService } from '../session/session.service';
 import { User } from '@prisma/client';
+import { UserToken } from '@/decorators/user';
 
 @ApiTags('Users')
 @Controller('user')

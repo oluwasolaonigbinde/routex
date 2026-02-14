@@ -11,6 +11,9 @@ import { UsersModule } from './modules/user/user.module';
 import { AuthorizationRequiredFilter } from './common/filters/authorization-required.filter';
 import { StorageModule } from './storage/storage.module';
 import { NotificationModule } from './modules/notification/notification.module';
+import { BookingModule } from './modules/booking/booking.module';
+import { DriverModule } from './modules/driver/driver.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
     imports: [
@@ -22,6 +25,9 @@ import { NotificationModule } from './modules/notification/notification.module';
         DatabaseModule,
         AuthModule,
         UsersModule,
+        BookingModule,
+        DriverModule,
+        AdminModule,
         // AdminModule,
         NotificationModule.forRoot(),
         StorageModule,

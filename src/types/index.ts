@@ -11,6 +11,7 @@ export interface PaginatedResponse<T> {
         limit: number;
         results: T[];
         page: number;
+        perPage: number;
         totalCount: number;
     };
 }

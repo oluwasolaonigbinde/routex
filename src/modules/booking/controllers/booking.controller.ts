@@ -1,0 +1,169 @@
+import {
+    Controller,
+    Post,
+    Get,
+    Patch,
+    Body,
+    Param,
+    Query,
+    HttpCode,
+    HttpStatus,
+    UseGuards,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { BookingService } from '../services/booking.service';
+import {
+    CreateBookingDto,
+    GetBookingsQueryDto,
+    CancelBookingDto,
+} from '../dto/booking.dto';
+import { Tenant } from '@/modules/auth/decorators/tenant.decorator';
+import type { AccessTokenDTO } from '@/types/auth';
+import { BookingOwnershipGuard } from '../guards/booking-ownership.guard';
+import { UserToken } from '@/decorators/user';
+import { SerializeOptions } from '@/util/decorator';
+import {
+    CreateBookingApiResponse,
+    BookingListApiResponse,
+    BookingEntityApiResponse,
+    BoardingPassListResponse,
+} from '../entities/booking.entity';
+import { PaginatedResponse } from '@/types';
+import { Booking } from '@prisma/client';
+
+@Controller('booking')
+@ApiTags('Booking')
+@Tenant('USER')
+export class BookingController {
+    constructor(private readonly bookingService: BookingService) {}
+
+    @Post()
+    @HttpCode(HttpStatus.CREATED)
+    @ApiOperation({ summary: 'Create a new booking' })
+    @ApiResponse({
+        status: 201,
+        description: 'Booking created successfully with payment URL',
+        type: CreateBookingApiResponse,
+    })
+    @SerializeOptions({
+        type: CreateBookingApiResponse,
+        strategy: 'excludeAll',
+    })
+    async createBooking(
+        @UserToken() user: AccessTokenDTO,
+        @Body() dto: CreateBookingDto,
+    ): Promise<CreateBookingApiResponse> {
+        const { booking, paymentUrl } = await this.bookingService.createBooking(
+            user.sub,
+            user.email,
+            dto,
+        );
+
+        return {
+            status: 'success',
+            message: 'Booking created successfully. Please complete payment.',
+            data: {
+                booking,
+                paymentUrl,
+            },
+        };
+    }
+
+    @Get()
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Get user bookings' })
+    @ApiResponse({
+        status: 200,
+        description: 'Bookings retrieved successfully',
+        type: BookingListApiResponse,
+    })
+    @SerializeOptions({ type: BookingListApiResponse, strategy: 'excludeAll' })
+    async getUserBookings(
+        @UserToken() user: AccessTokenDTO,
+        @Query() query: GetBookingsQueryDto,
+    ): Promise<PaginatedResponse<Booking>> {
+        const bookings = await this.bookingService.getUserBookings(
+            user.sub,
+            query,
+        );
+
+        return {
+            status: 'success',
+            message: 'Bookings retrieved successfully',
+            data: bookings,
+        };
+    }
+
+    @Get(':id')
+    @UseGuards(BookingOwnershipGuard)
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Get booking details' })
+    @ApiResponse({
+        status: 200,
+        description: 'Booking retrieved successfully',
+        type: BookingEntityApiResponse,
+    })
+    @SerializeOptions({
+        type: BookingEntityApiResponse,
+        strategy: 'excludeAll',
+    })
+    async getBookingById(@Param('id') id: string) {
+        const booking = await this.bookingService.getBookingById(id);
+
+        return {
+            status: 'success',
+            message: 'Booking retrieved successfully',
+            data: booking,
+        };
+    }
+
+    @Patch(':id/cancel')
+    @UseGuards(BookingOwnershipGuard)
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Cancel a booking' })
+    @ApiResponse({
+        status: 200,
+        description: 'Booking cancelled successfully',
+    })
+    @SerializeOptions({
+        type: BookingEntityApiResponse,
+        strategy: 'excludeAll',
+    })
+    async cancelBooking(
+        @UserToken() user: AccessTokenDTO,
+        @Param('id') id: string,
+        @Body() dto: CancelBookingDto,
+    ) {
+        await this.bookingService.cancelBooking(user.sub, id, dto.reason);
+
+        return {
+            status: 'success',
+            message: 'Booking cancelled successfully',
+        };
+    }
+
+    @Get(':id/boarding-passes')
+    @UseGuards(BookingOwnershipGuard)
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Get boarding passes for a booking' })
+    @ApiResponse({
+        status: 200,
+        description: 'Boarding passes retrieved successfully',
+        type: BoardingPassListResponse,
+    })
+    @SerializeOptions({
+        type: BoardingPassListResponse,
+        strategy: 'excludeAll',
+    })
+    async getBoardingPasses(
+        @Param('id') id: string,
+    ): Promise<BoardingPassListResponse> {
+        const passes = await this.bookingService.getBoardingPasses(id);
+
+        return {
+            status: 'success',
+            message: 'Boarding passes retrieved successfully',
+            data: passes,
+        };
+    }
+}

@@ -64,6 +64,12 @@ export class EnvironmentVariables {
     PAYSTACK_SECRET_KEY: string;
 
     @IsOptional()
+    PAYSTACK_CALLBACK_URL: string;
+
+    @IsString()
+    JWT_SECRET: string;
+
+    @IsOptional()
     ENCRYPTION_KEY: string;
 }
 

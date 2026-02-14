@@ -1,20 +1,12 @@
 import { BaseUserEntity } from '@/modules/auth/entities/auth.entity';
 import { ExposeAll } from '@/util/decorator';
-import { ApiProperty, PickType } from '@nestjs/swagger';
-import { Admin as PrismaAdmin, Role } from '@prisma/client';
-import { IsEnum } from 'class-validator';
+import { PickType } from '@nestjs/swagger';
+import { Driver as PrismaDriver } from '@prisma/client';
 
-export class Admin extends BaseUserEntity implements PrismaAdmin {
-    @IsEnum(Role)
-    @ApiProperty({
-        description: 'The role of the user or admin',
-        example: 'admin',
-    })
-    role: Role;
-}
+export class Driver extends BaseUserEntity implements PrismaDriver {}
 
 @ExposeAll()
-export class AdminEntity extends PickType(Admin, [
+export class DriverEntity extends PickType(Driver, [
     'id',
     'email',
     'emailVerifiedAt',
@@ -32,5 +24,12 @@ export class AdminEntity extends PickType(Admin, [
     'passwordResetRequired',
     'twoFactorEnabled',
     'twoFactorMethod',
-    'role',
+] as const) {}
+
+@ExposeAll()
+export class DriverEmbedEntity extends PickType(Driver, [
+    'id',
+    'email',
+    'firstName',
+    'lastName',
 ] as const) {}

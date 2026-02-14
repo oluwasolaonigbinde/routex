@@ -43,18 +43,6 @@ export class UpdateProfileDto extends PartialType(
     displayPhoto?: StoredFile;
 }
 
-export class VerifyEmailDto {
-    @IsString()
-    @IsNotEmpty()
-    @ApiProperty()
-    token: string;
-
-    @IsEmail()
-    @IsNotEmpty()
-    @ApiProperty()
-    email: string;
-}
-
 export class GetAllUsersDto extends PaginatedQuery {
     @IsOptional()
     @IsEnum(CredentialStatus)

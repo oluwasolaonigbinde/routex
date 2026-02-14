@@ -393,6 +393,9 @@ class SessionListResult implements SessionPaginatedResponse {
     @ApiProperty({ description: 'Total number of sessions', example: 100 })
     totalCount: number;
 
+    @ApiProperty({ type: Number })
+    perPage: number;
+
     @ApiProperty({ type: [SessionEntity], description: 'List of sessions' })
     @Type(() => SessionEntity)
     results: SessionEntity[];

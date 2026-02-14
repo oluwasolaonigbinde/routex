@@ -13,12 +13,13 @@ import { VerificationTokenModule } from '../verification-token/verification-toke
 import { IntentService } from './intent.service';
 import { AuthorizationMethodGuard } from './guard/authorization-method.guard';
 import { UserAuthorizationModule } from '../user/authorization/user-authorization.module';
+import { AuthAuthorizationModule } from './authorization/default-authorization.module';
 
 @Module({
     imports: [
         SessionModule,
+        AuthAuthorizationModule,
         VerificationTokenModule,
-        forwardRef(() => UserAuthorizationModule),
         JwtModule.registerAsync({
             global: true,
             useFactory: (

@@ -70,6 +70,19 @@ export class ForgotPasswordDto extends PickType(BaseUserEntity, [
     email: string;
 }
 
+export class VerifyEmailDto {
+    @IsString()
+    @IsNotEmpty()
+    @ApiProperty()
+    token: string;
+
+    @IsEmail()
+    @IsNotEmpty()
+    @ApiProperty()
+    email: string;
+}
+
+
 export class ResetPasswordDto {
     @IsNotEmpty()
     @IsEmail()

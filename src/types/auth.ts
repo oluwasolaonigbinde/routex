@@ -2,7 +2,7 @@ import { ApiResponse } from '.';
 import { IntersectionType, PickType } from '@nestjs/swagger';
 import { ExposeAll } from '@/util/decorator';
 import { BaseUserEntity } from '@/modules/auth/entities/auth.entity';
-import { Admin } from '@/modules/admin/entities';
+import { Admin } from '@/modules/admin/entities/admin.entity';
 
 export type JwtToken = {
     sub: string;

@@ -5,7 +5,9 @@ import { InAppNotificationService } from './services/in-app-notification.service
 import { NotificationService } from './services/notification.service';
 import { GoogleSmtpEmailStrategy } from './email/google-smtp.strategy';
 import { VerificationTokenModule } from '../verification-token/verification-token.module';
+import { DatabaseModule } from '../database/database.module';
 import { UserNotificationListener } from './listeners/user-notification.listener';
+import { BookingNotificationListener } from './listeners/booking-notification.listener';
 // import { NotificationAdminController } from './controllers/notification.admin.controller';
 import { NotificationUserController } from './controllers/notification.user.controller';
 
@@ -14,13 +16,14 @@ export class NotificationModule {
     static forRoot(): DynamicModule {
         return {
             module: NotificationModule,
-            imports: [VerificationTokenModule, ConfigModule],
+            imports: [VerificationTokenModule, DatabaseModule, ConfigModule],
             providers: [
                 EmailService,
                 InAppNotificationService,
                 NotificationService,
                 // AdminNotificationListener,
                 UserNotificationListener,
+                BookingNotificationListener,
                 // {
                 //     provide: ResendEmailStrategy,
                 //     useFactory: (configService: ConfigService) => {

@@ -2,7 +2,7 @@ import { ExposeAll } from '@/util/decorator';
 import { PickType } from '@nestjs/swagger';
 import { Prisma } from '@prisma/client';
 import { IsOptional } from 'class-validator';
-import { Admin } from '../entities';
+import { Admin } from '../entities/admin.entity';
 
 @ExposeAll()
 export class CreateAdminDto

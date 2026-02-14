@@ -7,7 +7,11 @@ import {
     IsOptional,
     IsString,
 } from 'class-validator';
-import { Notification as PrismaNotification, Tenant } from '@prisma/client';
+import {
+    Notification as PrismaNotification,
+    Tenant,
+    Prisma,
+} from '@prisma/client';
 import { ApiResponse } from '@/types';
 import { PaginatedResponse } from '@/util/dto';
 import { Type } from 'class-transformer';
@@ -43,9 +47,9 @@ export class Notification implements PrismaNotification {
     @IsString()
     message: string;
 
-    @ApiPropertyOptional({ type: Object })
+    @ApiPropertyOptional({ type: Object, nullable: true })
     @IsOptional()
-    metadata: any;
+    metadata: Prisma.JsonValue | null;
 
     @ApiProperty({
         type: Boolean,
@@ -107,9 +111,7 @@ class NotificationListResult implements NotificationPaginatedResponse {
 }
 
 @ExposeAll()
-export class NotificationListResponse
-    implements PaginatedResponse<NotificationEntity>
-{
+export class NotificationListResponse implements PaginatedResponse<NotificationEntity> {
     @ApiProperty({ example: 'Notifications fetched successfully' })
     message: string;
 
@@ -134,9 +136,7 @@ export class NotifcationSummary {
 }
 
 @ExposeAll()
-export class NotificationSummaryResponse
-    implements ApiResponse<NotifcationSummary>
-{
+export class NotificationSummaryResponse implements ApiResponse<NotifcationSummary> {
     @ApiProperty({ example: 'Notification summary retrieved successfully' })
     message: string;
 
