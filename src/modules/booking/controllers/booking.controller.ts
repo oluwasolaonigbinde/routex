@@ -11,7 +11,6 @@ import {
     UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { BookingService } from '../services/booking.service';
 import {
     CreateBookingDto,
     CreateBookingFromScheduleDto,
@@ -31,6 +30,7 @@ import {
 } from '../entities/booking.entity';
 import { PaginatedResponse } from '@/types';
 import { Booking } from '@prisma/client';
+import { BookingService } from '@/modules/booking/services/booking.service';
 
 @Controller('booking')
 @ApiTags('Booking')

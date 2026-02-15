@@ -1,10 +1,12 @@
+import { AuthModule } from '@/modules/auth/auth.module';
+import { BookingModule } from '@/modules/booking/booking.module';
+import { DriversController } from '@/modules/driver/driver.controller';
+import { DriverService } from '@/modules/driver/driver.service';
 import { Module } from '@nestjs/common';
-import { DatabaseModule } from '../database/database.module';
-import { BookingModule } from '../booking/booking.module';
-import { DriverController } from './driver.controller';
 
 @Module({
-    imports: [DatabaseModule, BookingModule],
-    controllers: [DriverController],
+    imports: [BookingModule, AuthModule],
+    providers: [DriverService],
+    controllers: [DriversController],
 })
 export class DriverModule {}

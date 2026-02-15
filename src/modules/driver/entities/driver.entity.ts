@@ -1,4 +1,5 @@
 import { BaseUserEntity } from '@/modules/auth/entities/auth.entity';
+import { BaseUserAccessTokenClaims, JwtToken } from '@/types/auth';
 import { ExposeAll } from '@/util/decorator';
 import { PickType } from '@nestjs/swagger';
 import { Driver as PrismaDriver } from '@prisma/client';
@@ -33,3 +34,8 @@ export class DriverEmbedEntity extends PickType(Driver, [
     'firstName',
     'lastName',
 ] as const) {}
+
+export class DriverAccessTokenClaims extends BaseUserAccessTokenClaims {}
+
+export interface DriverAccessTokenDTO
+    extends JwtToken, DriverAccessTokenClaims {}

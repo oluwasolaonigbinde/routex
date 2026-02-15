@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
-import { DatabaseModule } from '../database/database.module';
 
 // Services
 import { BookingService } from './services/booking.service';
@@ -28,12 +27,7 @@ import { TripService } from './services/trip.service';
 import { UsersModule } from '../user/user.module';
 
 @Module({
-    imports: [
-        DatabaseModule,
-        ConfigModule,
-        UsersModule,
-        JwtModule.register({}),
-    ],
+    imports: [ConfigModule, UsersModule, JwtModule.register({})],
     controllers: [
         BookingController,
         TripController,

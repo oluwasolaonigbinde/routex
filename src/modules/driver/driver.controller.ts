@@ -1,237 +1,383 @@
 import {
     Controller,
-    Post,
     Get,
-    Patch,
-    Body,
-    Param,
-    Query,
     HttpCode,
     HttpStatus,
+    Post,
+    HttpException,
+    Body,
     UseGuards,
+    Patch,
+    Req,
+    Query,
+    Delete,
+    Param,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { BoardingService } from '@/modules/booking/services/boarding.service';
-import { TripExecutionService } from '@/modules/booking/services/trip-execution.service';
-import { DatabaseService } from '@/modules/database/database.service';
+import type { AccessTokenDTO, RefreshToken } from '@/types/auth';
 import {
-    BoardPassengerDto,
-    UpdateTripStatusDto,
-    UpdateStopStatusDto,
-} from '@/modules/booking/dto/trip.dto';
-import { Tenant } from '@/modules/auth/decorators/tenant.decorator';
-import type { AccessTokenDTO } from '@/types/auth';
-import { DriverAssignmentGuard } from '@/modules/booking/guards/driver-assignment.guard';
-import { TripStatus } from '@prisma/client';
-import { UserToken } from '@/decorators/user';
+    ApiBearerAuth,
+    ApiOperation,
+    ApiResponse,
+    ApiTags,
+    ApiBody,
+    ApiUnauthorizedResponse,
+    ApiBadRequestResponse,
+    ApiNotFoundResponse,
+    ApiConsumes,
+} from '@nestjs/swagger';
+import { ApiResponse as ApiResponseType } from '@/types';
+import { FormDataRequest } from 'nestjs-form-data';
 import { SerializeOptions } from '@/util/decorator';
-import { PassengerTripApiResponse } from '../booking/entities/passenger.entity';
+import type { Request } from 'express';
+import { PaginatedQuery } from '@/util/dto';
+import { UserToken } from '@/decorators/user';
+import { SessionService } from '@/modules/session/session.service';
+import { Driver } from '@/modules/driver/entities/driver.entity';
 import {
-    TripEntityApiResponse,
-    TripListApiResponse,
-    TripStopStatusApiResponse,
-} from '../booking/entities/trip.entity';
-import { BoardingStatusApiResponse } from '../booking/entities/booking.entity';
+    LoginUserResponse,
+    UserPrivateEntityApiResponse,
+} from '@/modules/user/entities/user.entity';
+import { DriverService } from '@/modules/driver/driver.service';
+import { Tenant } from '@/modules/auth/decorators/tenant.decorator';
+import { UpdateProfileDto } from '@/modules/user/dto/dto';
+import {
+    ChangePasswordDto,
+    DeviceInfo,
+    ForgotPasswordDto,
+    LoginDto,
+    ResetPasswordDto,
+    VerifyEmailDto,
+} from '@/modules/auth/dto/auth.dto';
+import { Public } from '@/modules/auth/decorators/public-route.decorator';
+import { RequiredScopes } from '@/modules/auth/decorators/scopes.decorator';
+import { RefreshTokenGuard } from '@/modules/auth/guard/refresh-auth.guard';
+import { SessionListResponse } from '@/modules/auth/entities/auth.entity';
 
+@ApiTags('Drivers')
 @Controller('driver')
-@ApiTags('Driver')
 @Tenant('DRIVER')
-export class DriverController {
+export class DriversController {
     constructor(
-        private readonly boardingService: BoardingService,
-        private readonly tripExecutionService: TripExecutionService,
-        private readonly db: DatabaseService,
+        private readonly driverService: DriverService,
+        private readonly sessionService: SessionService,
     ) {}
 
-    @Post('board-passenger')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Board a passenger by scanning QR code' })
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Get authenticated driver profile' })
     @ApiResponse({
         status: 200,
-        description: 'Passenger boarded successfully',
-        type: PassengerTripApiResponse,
+        description: 'Profile retrieved successfully',
+        type: UserPrivateEntityApiResponse,
     })
     @SerializeOptions({
-        type: PassengerTripApiResponse,
+        type: UserPrivateEntityApiResponse,
         strategy: 'excludeAll',
     })
-    async boardPassenger(
-        @UserToken() user: AccessTokenDTO,
-        @Body() dto: BoardPassengerDto,
-    ): Promise<PassengerTripApiResponse> {
-        const result = await this.boardingService.boardPassenger(
-            user.sub,
-            dto.boardingToken,
-        );
+    @HttpCode(HttpStatus.OK)
+    @Get('profile')
+    async getProfile(
+        @UserToken<AccessTokenDTO>() token: AccessTokenDTO,
+    ): Promise<ApiResponseType<Driver>> {
+        const driver = await this.driverService.findUser({ id: token.sub });
 
         return {
+            data: driver,
             status: 'success',
-            message: result.alreadyBoarded
-                ? 'Passenger already boarded'
-                : 'Passenger boarded successfully',
-            data: result.passengerTrip,
+            message: 'Profile retrieved successfully',
         };
     }
 
-    @Get('trips')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Get assigned trips for driver' })
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Update authenticated driver profile' })
+    @ApiConsumes('multipart/form-data')
+    @ApiBody({
+        type: UpdateProfileDto,
+    })
     @ApiResponse({
         status: 200,
-        description: 'Trips retrieved successfully',
-        type: TripListApiResponse,
+        description: 'Profile updated successfully',
+        type: UserPrivateEntityApiResponse,
     })
-    @SerializeOptions({ type: TripListApiResponse, strategy: 'excludeAll' })
-    async getAssignedTrips(
-        @UserToken() user: AccessTokenDTO,
-        @Query('date') date?: string,
+    @ApiUnauthorizedResponse({ description: 'Unauthorized' })
+    @ApiBadRequestResponse({ description: 'Invalid input data' })
+    @SerializeOptions({
+        type: UserPrivateEntityApiResponse,
+        strategy: 'excludeAll',
+    })
+    @FormDataRequest()
+    @Patch('profile')
+    @HttpCode(HttpStatus.OK)
+    async updateProfile(
+        @UserToken<AccessTokenDTO>() token: AccessTokenDTO,
+        @Body() updateProfileDto: UpdateProfileDto,
+    ): Promise<ApiResponseType<Driver>> {
+        const updatedUser = await this.driverService.updateProfile(
+            token.sub,
+            updateProfileDto,
+        );
+
+        return {
+            data: updatedUser,
+            status: 'success',
+            message: 'Profile updated successfully',
+        };
+    }
+
+    @ApiOperation({ summary: 'User login' })
+    @ApiBody({ type: LoginDto, description: 'User login credentials' })
+    @ApiResponse({
+        status: 200,
+        description: 'Login successful',
+        type: LoginUserResponse,
+    })
+    @SerializeOptions({
+        type: LoginUserResponse,
+        strategy: 'excludeAll',
+    })
+    @Public()
+    @HttpCode(HttpStatus.OK)
+    @Post('login')
+    async login(@Body() loginDto: LoginDto, @Req() req: Request) {
+        const deviceInfo: DeviceInfo = {
+            ipAddress: req.ip,
+            userAgent: req.headers['user-agent'],
+            deviceId: loginDto.deviceId,
+            deviceName: loginDto.deviceName,
+        };
+        const loginData = await this.driverService.signIn(loginDto, deviceInfo);
+
+        return {
+            data: loginData,
+            message: 'Login successful',
+            status: 'success',
+        };
+    }
+
+    @Post('resend-verification')
+    @RequiredScopes('email:resend')
+    async resendVerificationEmail(
+        @UserToken<AccessTokenDTO>() token: AccessTokenDTO,
     ) {
-        const searchDate = date ? new Date(date) : new Date();
-        searchDate.setUTCHours(0, 0, 0, 0);
-
-        const endOfDay = new Date(searchDate);
-        endOfDay.setUTCHours(23, 59, 59, 999);
-
-        const trips = await this.db.trip.findMany({
-            where: {
-                driverId: user.sub,
-                departureTime: {
-                    gte: searchDate,
-                    lte: endOfDay,
-                },
-                status: {
-                    in: [
-                        TripStatus.SCHEDULED,
-                        TripStatus.BOARDING,
-                        TripStatus.IN_PROGRESS,
-                    ],
-                },
-            },
-            include: {
-                route: {
-                    include: {
-                        startLocation: true,
-                        endLocation: true,
-                    },
-                },
-                vehicle: true,
-            },
-            orderBy: {
-                departureTime: 'asc',
-            },
-        });
+        await this.driverService.resendVerificationEmail(token.sub);
 
         return {
             status: 'success',
-            message: 'Trips retrieved successfully',
-            data: trips,
+            message: 'Verification email resent successfully',
         };
     }
 
-    @Get('trips/:tripId/boarding-status')
-    @UseGuards(DriverAssignmentGuard)
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Get boarding status for a trip' })
-    @ApiResponse({
-        status: 200,
-        description: 'Boarding status retrieved successfully',
-        type: BoardingStatusApiResponse,
-    })
-    @SerializeOptions({
-        type: BoardingStatusApiResponse,
-        strategy: 'excludeAll',
-    })
-    async getBoardingStatus(
-        @Param('tripId') tripId: string,
-    ): Promise<BoardingStatusApiResponse> {
-        const status = await this.boardingService.getBoardingStatus(tripId);
-
-        return {
-            status: 'success',
-            message: 'Boarding status retrieved successfully',
-            data: status,
-        };
-    }
-
-    @Patch('trips/:tripId/status')
-    @UseGuards(DriverAssignmentGuard)
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Update trip status' })
-    @ApiResponse({
-        status: 200,
-        description: 'Trip status updated successfully',
-        type: TripEntityApiResponse,
-    })
-    @SerializeOptions({ type: TripEntityApiResponse, strategy: 'excludeAll' })
-    async updateTripStatus(
-        @UserToken() user: AccessTokenDTO,
-        @Param('tripId') tripId: string,
-        @Body() dto: UpdateTripStatusDto,
-    ): Promise<TripEntityApiResponse> {
-        const trip = await this.tripExecutionService.updateTripStatus(
-            tripId,
-            dto.status,
-            user.sub,
+    @Post('verify-email')
+    @Public()
+    @ApiBody({ type: VerifyEmailDto })
+    async verifyEmail(@Body() verifyEmailDto: VerifyEmailDto) {
+        await this.driverService.verifyEmail(
+            verifyEmailDto.token,
+            verifyEmailDto.email,
         );
 
         return {
             status: 'success',
-            message: 'Trip status updated successfully',
-            data: trip,
+            message: 'Email verified successfully',
         };
     }
 
-    @Post('trips/:tripId/stops/:stopId/status')
-    @UseGuards(DriverAssignmentGuard)
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Update stop status' })
+    @ApiOperation({ summary: 'Refresh access token' })
+    @ApiBearerAuth()
     @ApiResponse({
         status: 200,
-        description: 'Stop status updated successfully',
-        type: TripStopStatusApiResponse,
+        description: 'Token refreshed successfully',
+        schema: {
+            example: {
+                access_token: 'new_jwt_token',
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({ description: 'Invalid refresh token' })
+    @Public()
+    @UseGuards(RefreshTokenGuard)
+    @HttpCode(HttpStatus.OK)
+    @Post('refresh')
+    async refresh(@UserToken<RefreshToken>() token: RefreshToken) {
+        return await this.driverService.refreshToken(token);
+    }
+
+    @ApiOperation({ summary: 'User logout' })
+    @ApiBearerAuth()
+    @ApiResponse({
+        status: 200,
+        description: 'Logout successful',
+        schema: {
+            example: {
+                status: 'success',
+                message: 'Successfully logged out',
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({ description: 'Invalid access token' })
+    @ApiNotFoundResponse({ description: 'Failed to log out' })
+    @HttpCode(HttpStatus.OK)
+    @Post('logout')
+    async logout(@UserToken<AccessTokenDTO>() token: AccessTokenDTO) {
+        if (await this.driverService.logout(token)) {
+            return { status: 'success', message: 'Successfully logged out' };
+        }
+        throw new HttpException('Failed to log out', HttpStatus.NOT_FOUND);
+    }
+
+    @ApiOperation({ summary: 'Change user password' })
+    @ApiBearerAuth()
+    @ApiBody({ type: ChangePasswordDto, description: 'Old and new password' })
+    @ApiResponse({
+        status: 200,
+        description: 'Password changed successfully',
+        schema: {
+            example: {
+                status: 'success',
+                message: 'Successfully changed password',
+            },
+        },
+    })
+    @ApiUnauthorizedResponse({ description: 'Invalid access token' })
+    @ApiBadRequestResponse({
+        description: 'Invalid old password or weak new password',
+    })
+    @ApiNotFoundResponse({ description: 'Failed to change password' })
+    @Post('change-password')
+    @HttpCode(HttpStatus.OK)
+    async changePassword(
+        @UserToken<AccessTokenDTO>() token: AccessTokenDTO,
+        @Body() password: ChangePasswordDto,
+    ) {
+        if (await this.driverService.changePassword(token.sub, password)) {
+            return {
+                status: 'success',
+                message: 'Successfully changed password',
+            };
+        }
+        throw new HttpException(
+            'Failed to change password',
+            HttpStatus.NOT_FOUND,
+        );
+    }
+
+    @ApiOperation({ summary: 'Request password reset' })
+    @ApiBody({
+        type: ForgotPasswordDto,
+        description: 'Email for password reset',
+    })
+    @ApiResponse({
+        status: 200,
+        description: 'Password reset email sent',
+        schema: {
+            example: {
+                message: 'Password reset email sent',
+            },
+        },
+    })
+    @ApiBadRequestResponse({ description: 'Invalid email format' })
+    @Public()
+    @Post('forgot-password')
+    @HttpCode(HttpStatus.OK)
+    async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto) {
+        try {
+            await this.driverService.requestPasswordReset(
+                forgotPasswordDto.email,
+            );
+        } catch {
+            throw new HttpException(
+                'Failed to process password reset request',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+
+        return { message: 'Password reset email sent' };
+    }
+
+    @ApiOperation({ summary: 'Reset password with token' })
+    @ApiBody({
+        type: ResetPasswordDto,
+        description: 'Reset token and new password',
+    })
+    @ApiResponse({
+        status: 200,
+        description: 'Password reset successful',
+        schema: {
+            example: {
+                status: 'success',
+                message: 'Successfully changed password',
+            },
+        },
+    })
+    @ApiBadRequestResponse({ description: 'Invalid token or weak password' })
+    @ApiNotFoundResponse({ description: 'Failed to reset password' })
+    @Public()
+    @Post('reset-password')
+    @HttpCode(HttpStatus.OK)
+    async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+        const resetPasswordStatus =
+            await this.driverService.resetPassword(resetPasswordDto);
+        if (resetPasswordStatus) {
+            return {
+                status: 'success',
+                message: 'Successfully changed password',
+            };
+        }
+        throw new HttpException(
+            'Failed to reset password',
+            HttpStatus.NOT_FOUND,
+        );
+    }
+    @ApiOperation({ summary: 'Get user sessions' })
+    @ApiBearerAuth()
+    @ApiResponse({
+        status: 200,
+        description: 'User sessions retrieved successfully',
+        type: SessionListResponse,
     })
     @SerializeOptions({
-        type: TripStopStatusApiResponse,
+        type: SessionListResponse,
         strategy: 'excludeAll',
     })
-    async updateStopStatus(
-        @Param('tripId') tripId: string,
-        @Param('stopId') stopId: string,
-        @Body() dto: UpdateStopStatusDto,
-    ): Promise<TripStopStatusApiResponse> {
-        const stopStatus = await this.tripExecutionService.updateStopStatus(
-            tripId,
-            stopId,
-            dto.status,
+    @Get('sessions')
+    async getUserSessions(
+        @UserToken<AccessTokenDTO>() token: AccessTokenDTO,
+        @Query() query: PaginatedQuery,
+    ) {
+        const sessions = await this.sessionService.getUserSessions(
+            token.sub,
+            query,
+            token.sid,
         );
 
         return {
             status: 'success',
-            message: 'Stop status updated successfully',
-            data: stopStatus,
+            message: 'User sessions retrieved successfully',
+            data: sessions,
         };
     }
 
-    @Get('trips/:tripId')
-    @UseGuards(DriverAssignmentGuard)
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Get trip execution details' })
+    @ApiOperation({ summary: 'Revoke sessions by device ID' })
+    @ApiBearerAuth()
     @ApiResponse({
         status: 200,
-        description: 'Trip details retrieved successfully',
-        type: TripEntityApiResponse,
+        description: 'Device sessions revoked successfully',
+        schema: {
+            example: {
+                status: 'success',
+                message: 'Device sessions revoked successfully',
+            },
+        },
     })
-    @SerializeOptions({ type: TripEntityApiResponse, strategy: 'excludeAll' })
-    async getTripDetails(
-        @Param('tripId') tripId: string,
-    ): Promise<TripEntityApiResponse> {
-        const trip =
-            await this.tripExecutionService.getTripExecutionDetails(tripId);
+    @Delete('sessions/device/:deviceId')
+    async revokeDeviceSessions(
+        @UserToken<AccessTokenDTO>() token: AccessTokenDTO,
+        @Param('deviceId') deviceId: string,
+    ) {
+        await this.sessionService.revokeDeviceSessions(token.sub, deviceId);
 
         return {
             status: 'success',
-            message: 'Trip details retrieved successfully',
-            data: trip,
+            message: 'Device sessions revoked successfully',
         };
     }
 }
