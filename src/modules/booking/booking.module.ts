@@ -19,21 +19,25 @@ import { TripController } from './controllers/trip.controller';
 import { PaymentWebhookController } from './controllers/payment-webhook.controller';
 import { TripAdminController } from './controllers/trip.admin.controller';
 import { RouteAdminController } from './controllers/route.admin.controller';
+import { ScheduleController } from './controllers/schedule.controller';
 
 // Guards
 import { BookingOwnershipGuard } from './guards/booking-ownership.guard';
 import { DriverAssignmentGuard } from './guards/driver-assignment.guard';
 import { TripService } from './services/trip.service';
+import { UsersModule } from '../user/user.module';
 
 @Module({
     imports: [
         DatabaseModule,
         ConfigModule,
-        JwtModule.register({}), // Will use ConfigService for secrets
+        UsersModule,
+        JwtModule.register({}),
     ],
     controllers: [
         BookingController,
         TripController,
+        ScheduleController,
         TripAdminController,
         RouteAdminController,
         PaymentWebhookController,

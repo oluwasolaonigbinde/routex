@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { SearchTripsDto } from '../dto/booking.dto';
 import { DatabaseService } from '@/modules/database/database.service';
 import { Prisma, Trip } from '@prisma/client';
 import { PaginatedResponse } from '@/types';
+import { SearchTripsDto } from '../dto/trip.dto';
+import { TripNotFoundException } from '../exceptions/booking.exception';
+import { TripWithStopsInclude } from '../types';
 
 @Injectable()
 export class TripService {
@@ -77,5 +79,18 @@ export class TripService {
             results: trips,
             perPage: trips.length,
         };
+    }
+
+    async getTripById(id: string): Promise<TripWithStopsInclude> {
+        const trip = await this.db.trip.findUnique({
+            where: { id },
+            include: TripWithStopsInclude,
+        });
+
+        if (!trip) {
+            throw new TripNotFoundException(id);
+        }
+
+        return trip;
     }
 }

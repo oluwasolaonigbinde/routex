@@ -215,3 +215,40 @@ export class BookingCancellationNotAllowedException extends HttpException {
         );
     }
 }
+
+export class ScheduleNotAvailableForDateException extends HttpException {
+    constructor(scheduleId: string, date: string) {
+        super(
+            {
+                status: 'failed',
+                message: `Schedule ${scheduleId} is not available for date ${date}. The date may fall outside the schedule's active range or does not match its recurrence pattern.`,
+            },
+            HttpStatus.BAD_REQUEST,
+        );
+    }
+}
+
+export class TripNotBookableException extends HttpException {
+    constructor(reason?: string) {
+        super(
+            {
+                status: 'failed',
+                message:
+                    reason || 'Trip is not available for booking at this time',
+            },
+            HttpStatus.BAD_REQUEST,
+        );
+    }
+}
+
+export class InvalidStopException extends HttpException {
+    constructor(stopId: string, reason: string) {
+        super(
+            {
+                status: 'failed',
+                message: `Invalid stop ${stopId}: ${reason}`,
+            },
+            HttpStatus.BAD_REQUEST,
+        );
+    }
+}

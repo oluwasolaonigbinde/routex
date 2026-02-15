@@ -66,7 +66,7 @@ export class PaymentWebhookController {
         try {
             switch (payload.event) {
                 case 'charge.success':
-                    await this.bookingService.confirmPayment(
+                    await this.bookingService.confirmBooking(
                         payload.data.reference,
                     );
                     this.logger.log(

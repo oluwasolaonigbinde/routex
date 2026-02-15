@@ -2,15 +2,11 @@ import {
     IsString,
     IsUUID,
     IsOptional,
-    IsEmail,
     IsArray,
     ValidateNested,
     ArrayMinSize,
     IsEnum,
     IsDateString,
-    IsInt,
-    Min,
-    arrayMaxSize,
     ArrayMaxSize,
     IsDate,
 } from 'class-validator';
@@ -18,25 +14,7 @@ import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { BookingStatus, TripStatus } from '@prisma/client';
 import { PaginatedQuery } from '@/util/dto';
-
-export class PassengerDto {
-    @ApiProperty({ example: 'John' })
-    @IsString()
-    firstName: string;
-
-    @ApiProperty({ example: 'Doe' })
-    @IsString()
-    lastName: string;
-
-    @ApiProperty({ example: '+2348012345678' })
-    @IsString()
-    phoneNumber: string;
-
-    @ApiProperty({ example: 'john.doe@example.com', required: false })
-    @IsEmail()
-    @IsOptional()
-    email?: string;
-}
+import { CreatePassengerDto } from './passenger.dto';
 
 export class CreateBookingDto {
     @ApiProperty({ example: 'uuid', description: 'Outbound trip ID' })
@@ -71,15 +49,15 @@ export class CreateBookingDto {
     alightingStopId?: string;
 
     @ApiProperty({
-        type: [PassengerDto],
+        type: [CreatePassengerDto],
         description: 'List of passengers',
     })
     @IsArray()
     @ValidateNested({ each: true })
     @ArrayMinSize(1)
     @ArrayMaxSize(4)
-    @Type(() => PassengerDto)
-    passengers: PassengerDto[];
+    @Type(() => CreatePassengerDto)
+    passengers: CreatePassengerDto[];
 }
 
 export class CancelBookingDto {
@@ -109,37 +87,50 @@ export class GetBookingsQueryDto extends PaginatedQuery {
     tripStatus?: TripStatus;
 }
 
-export class SearchTripsDto extends PaginatedQuery {
-    @ApiPropertyOptional({ example: 'uuid', description: 'Start location ID' })
+export class CreateBookingFromScheduleDto {
+    @ApiProperty({ example: 'uuid', description: 'Trip schedule ID' })
+    @IsUUID()
+    tripScheduleId: string;
+
+    @ApiProperty({
+        example: '2026-03-01',
+        description: 'Departure date in YYYY-MM-DD format',
+    })
+    @Type(() => Date)
+    @IsDate({
+        message:
+            'departureDate must be a valid date string in YYYY-MM-DD format',
+    })
+    departureDate: Date;
+
+    @ApiProperty({
+        example: 'uuid',
+        description: 'Boarding stop location ID',
+        required: false,
+    })
     @IsUUID()
     @IsOptional()
-    startLocationId?: string;
+    boardingStopId?: string;
 
-    @ApiPropertyOptional({ example: 'uuid', description: 'End location ID' })
+    @ApiProperty({
+        example: 'uuid',
+        description: 'Alighting stop location ID',
+        required: false,
+    })
     @IsUUID()
     @IsOptional()
-    endLocationId?: string;
+    alightingStopId?: string;
 
-    @ApiPropertyOptional({
-        type: Date,
+    @ApiProperty({
+        type: [CreatePassengerDto],
+        description: 'List of passengers',
     })
-    @IsDate()
-    @Type(() => Date)
-    @IsOptional()
-    minDate?: Date;
-
-    @ApiPropertyOptional({
-        type: Date,
-    })
-    @IsDate()
-    @Type(() => Date)
-    @IsOptional()
-    maxDate?: Date;
-
-    @ApiPropertyOptional({ enum: TripStatus })
-    @IsEnum(TripStatus)
-    @IsOptional()
-    status?: TripStatus;
+    @IsArray()
+    @ValidateNested({ each: true })
+    @ArrayMinSize(1)
+    @ArrayMaxSize(4)
+    @Type(() => CreatePassengerDto)
+    passengers: CreatePassengerDto[];
 }
 
 export class VerifyPaymentDto {

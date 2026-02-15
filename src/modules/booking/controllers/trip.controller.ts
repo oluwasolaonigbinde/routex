@@ -8,7 +8,6 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { DatabaseService } from '@/modules/database/database.service';
-import { SearchTripsDto } from '../dto/booking.dto';
 import { Public } from '@/modules/auth/decorators/public-route.decorator';
 import { SerializeOptions } from '@/util/decorator';
 import {
@@ -16,6 +15,7 @@ import {
     TripListApiResponse,
 } from '../entities/trip.entity';
 import { TripService } from '../services/trip.service';
+import { SearchTripsDto } from '../dto/trip.dto';
 
 @Controller('trips')
 @ApiTags('Trips')
@@ -56,41 +56,7 @@ export class TripController {
     })
     @SerializeOptions({ type: TripEntityApiResponse, strategy: 'excludeAll' })
     async getTripById(@Param('id') id: string): Promise<TripEntityApiResponse> {
-        const trip = await this.db.trip.findUnique({
-            where: { id },
-            include: {
-                route: {
-                    include: {
-                        startLocation: true,
-                        endLocation: true,
-                        routeStops: {
-                            include: {
-                                stop: true,
-                            },
-                            orderBy: {
-                                sequence: 'asc',
-                            },
-                        },
-                    },
-                },
-                vehicle: true,
-                tripStopStatuses: {
-                    include: {
-                        stop: true,
-                    },
-                    orderBy: {
-                        sequence: 'asc',
-                    },
-                },
-            },
-        });
-
-        if (!trip) {
-            return {
-                status: 'failed',
-                message: 'Trip not found',
-            };
-        }
+        const trip = await this.tripService.getTripById(id);
 
         return {
             status: 'success',

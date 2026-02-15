@@ -87,10 +87,10 @@ export class DriverController {
         @Query('date') date?: string,
     ) {
         const searchDate = date ? new Date(date) : new Date();
-        searchDate.setHours(0, 0, 0, 0);
+        searchDate.setUTCHours(0, 0, 0, 0);
 
         const endOfDay = new Date(searchDate);
-        endOfDay.setHours(23, 59, 59, 999);
+        endOfDay.setUTCHours(23, 59, 59, 999);
 
         const trips = await this.db.trip.findMany({
             where: {

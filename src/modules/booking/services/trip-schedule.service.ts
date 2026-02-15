@@ -1,14 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '@/modules/database/database.service';
-import { CreateTripScheduleDto, UpdateTripScheduleDto } from '../dto/trip.dto';
+import {
+    CreateTripScheduleDto,
+    UpdateTripScheduleDto,
+    SearchSchedulesDto,
+} from '../dto/trip.dto';
 import {
     TripScheduleNotFoundException,
     RouteNotFoundException,
     VehicleNotFoundException,
 } from '../exceptions/booking.exception';
 import { TripScheduleCreatedEvent } from '../events/booking.events';
-import { RecurrencePattern, TripStatus } from '@prisma/client';
+import { RecurrencePattern, TripStatus, Prisma } from '@prisma/client';
 
 @Injectable()
 export class TripScheduleService {
@@ -79,22 +83,7 @@ export class TripScheduleService {
 
         return this.db.tripSchedule.update({
             where: { id: scheduleId },
-            data: {
-                ...(dto.departureTime && {
-                    departureTime: dto.departureTime,
-                }),
-                ...(dto.arrivalOffsetMin && {
-                    arrivalOffsetMin: dto.arrivalOffsetMin,
-                }),
-                ...(dto.startDate && {
-                    startDate: new Date(dto.startDate),
-                }),
-                ...(dto.endDate !== undefined && {
-                    endDate: dto.endDate ? new Date(dto.endDate) : null,
-                }),
-                ...(dto.recurrence && { recurrence: dto.recurrence }),
-                ...(dto.daysOfWeek && { daysOfWeek: dto.daysOfWeek }),
-            },
+            data: dto,
         });
     }
 
@@ -228,6 +217,70 @@ export class TripScheduleService {
     }
 
     /**
+     * Search schedules with location, route, and date filters
+     */
+    async searchSchedules(dto: SearchSchedulesDto) {
+        const { page, limit } = dto;
+        const skip = (page - 1) * limit;
+
+        const where: Prisma.TripScheduleWhereInput = {
+            isActive: true,
+            ...(dto.startLocationId && {
+                route: {
+                    startLocationId: dto.startLocationId,
+                    ...(dto.endLocationId && {
+                        endLocationId: dto.endLocationId,
+                    }),
+                },
+            }),
+            ...(!dto.startLocationId &&
+                dto.endLocationId && {
+                    route: {
+                        endLocationId: dto.endLocationId,
+                    },
+                }),
+        };
+
+        // If a specific date is provided, filter by date range and daysOfWeek
+        if (dto.date) {
+            const targetDate = new Date(dto.date);
+            targetDate.setUTCHours(0, 0, 0, 0);
+            const dayOfWeek = targetDate.getDay();
+
+            where.startDate = { lte: targetDate };
+            where.OR = [{ endDate: null }, { endDate: { gte: targetDate } }];
+            where.daysOfWeek = { has: dayOfWeek };
+        }
+
+        const [schedules, totalCount] = await Promise.all([
+            this.db.tripSchedule.findMany({
+                where,
+                include: {
+                    route: {
+                        include: {
+                            startLocation: true,
+                            endLocation: true,
+                        },
+                    },
+                    vehicle: true,
+                },
+                orderBy: { departureTime: 'asc' },
+                skip,
+                take: limit,
+            }),
+            this.db.tripSchedule.count({ where }),
+        ]);
+
+        return {
+            totalCount,
+            page,
+            limit,
+            results: schedules,
+            perPage: schedules.length,
+        };
+    }
+
+    /**
      * Calculate service dates based on recurrence pattern
      */
     private calculateServiceDates(
@@ -238,10 +291,10 @@ export class TripScheduleService {
     ): Date[] {
         const dates: Date[] = [];
         const current = new Date(startDate);
-        current.setHours(0, 0, 0, 0);
+        current.setUTCHours(0, 0, 0, 0);
 
         const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
+        end.setUTCHours(23, 59, 59, 999);
 
         while (current <= end) {
             if (recurrence === RecurrencePattern.DAILY) {
@@ -270,7 +323,7 @@ export class TripScheduleService {
     private combineDateAndTime(date: Date, timeString: string): Date {
         const [hours, minutes] = timeString.split(':').map(Number);
         const result = new Date(date);
-        result.setHours(hours, minutes, 0, 0);
+        result.setUTCHours(hours, minutes, 0, 0);
         return result;
     }
 

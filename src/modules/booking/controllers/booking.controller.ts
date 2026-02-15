@@ -14,6 +14,7 @@ import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { BookingService } from '../services/booking.service';
 import {
     CreateBookingDto,
+    CreateBookingFromScheduleDto,
     GetBookingsQueryDto,
     CancelBookingDto,
 } from '../dto/booking.dto';
@@ -53,15 +54,43 @@ export class BookingController {
         @UserToken() user: AccessTokenDTO,
         @Body() dto: CreateBookingDto,
     ): Promise<CreateBookingApiResponse> {
-        const { booking, paymentUrl } = await this.bookingService.createBooking(
-            user.sub,
-            user.email,
-            dto,
-        );
+        const { booking, paymentUrl } =
+            await this.bookingService.createBookingFromTrip(user.sub, dto);
 
         return {
             status: 'success',
             message: 'Booking created successfully. Please complete payment.',
+            data: {
+                booking,
+                paymentUrl,
+            },
+        };
+    }
+
+    @Post('from-schedule')
+    @HttpCode(HttpStatus.CREATED)
+    @ApiOperation({ summary: 'Create a booking from a trip schedule' })
+    @ApiResponse({
+        status: 201,
+        description:
+            'Booking created from schedule successfully with payment URL',
+        type: CreateBookingApiResponse,
+    })
+    @SerializeOptions({
+        type: CreateBookingApiResponse,
+        strategy: 'excludeAll',
+    })
+    async createBookingFromSchedule(
+        @UserToken() user: AccessTokenDTO,
+        @Body() dto: CreateBookingFromScheduleDto,
+    ): Promise<CreateBookingApiResponse> {
+        const { booking, paymentUrl } =
+            await this.bookingService.createBookingFromSchedule(user.sub, dto);
+
+        return {
+            status: 'success',
+            message:
+                'Booking created from schedule successfully. Please complete payment.',
             data: {
                 booking,
                 paymentUrl,

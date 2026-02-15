@@ -16,6 +16,7 @@ import {
 } from '@nestjs/swagger';
 import { TripScheduleService } from '../services/trip-schedule.service';
 import { TripExecutionService } from '../services/trip-execution.service';
+import { TripCreationService } from '../services/trip-creation.service';
 import { DatabaseService } from '@/modules/database/database.service';
 import {
     CreateTripScheduleDto,
@@ -44,6 +45,7 @@ export class TripAdminController {
     constructor(
         private readonly tripScheduleService: TripScheduleService,
         private readonly tripExecutionService: TripExecutionService,
+        private readonly tripCreationService: TripCreationService,
         private readonly db: DatabaseService,
     ) {}
 
@@ -192,29 +194,7 @@ export class TripAdminController {
     async createAdHocTrip(
         @Body() dto: CreateAdHocTripDto,
     ): Promise<TripEntityApiResponse> {
-        const trip = await this.db.trip.create({
-            data: {
-                code: `AD-${Date.now()}`,
-                routeId: dto.routeId,
-                vehicleId: dto.vehicleId,
-                driverId: dto.driverId,
-                departureTime: new Date(dto.departureTime),
-                availableSeats: (await this.db.vehicle.findUnique({
-                    where: { id: dto.vehicleId },
-                }))!.totalSeats,
-                priceOverride: dto.priceOverride,
-                status: 'SCHEDULED',
-            },
-            include: {
-                route: {
-                    include: {
-                        startLocation: true,
-                        endLocation: true,
-                    },
-                },
-                vehicle: true,
-            },
-        });
+        const trip = await this.tripCreationService.createAdHocTrip(dto);
 
         return {
             status: 'success',
@@ -241,9 +221,9 @@ export class TripAdminController {
 
         if (date) {
             const searchDate = new Date(date);
-            searchDate.setHours(0, 0, 0, 0);
+            searchDate.setUTCHours(0, 0, 0, 0);
             const endOfDay = new Date(searchDate);
-            endOfDay.setHours(23, 59, 59, 999);
+            endOfDay.setUTCHours(23, 59, 59, 999);
 
             where.departureTime = {
                 gte: searchDate,

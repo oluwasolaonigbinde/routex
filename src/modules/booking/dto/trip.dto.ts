@@ -9,10 +9,12 @@ import {
     Min,
     Matches,
     ArrayMinSize,
+    IsDate,
 } from 'class-validator';
-import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { TripStatus, RecurrencePattern, StopStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
+import { PaginatedQuery } from '@/util/dto';
 
 export class CreateTripScheduleDto {
     @ApiProperty({ example: 'uuid', description: 'Route ID' })
@@ -45,17 +47,19 @@ export class CreateTripScheduleDto {
         example: '2026-02-20',
         description: 'Start date in YYYY-MM-DD format',
     })
-    @IsDateString()
-    startDate: string;
+    @IsDate()
+    @Type(() => Date)
+    startDate: Date;
 
     @ApiProperty({
         example: '2026-12-31',
         description: 'End date in YYYY-MM-DD format',
         required: false,
     })
-    @IsDateString()
+    @IsDate()
     @IsOptional()
-    endDate?: string;
+    @Type(() => Date)
+    endDate?: Date;
 
     @ApiProperty({
         enum: RecurrencePattern,
@@ -89,10 +93,13 @@ export class CreateAdHocTripDto {
 
     @ApiProperty({
         example: '2026-02-20T08:30:00Z',
-        description: 'Departure time',
+        description: 'Departure date and time',
     })
-    @IsDateString()
-    departureTime: string;
+    @Type(() => Date)
+    @IsDate({
+        message: 'departureDate must be a valid ISO 8601 date string',
+    })
+    departureDate: Date;
 
     @ApiProperty({
         example: 50,
@@ -161,4 +168,58 @@ export class GenerateTripsDto {
     })
     @IsDateString()
     endDate: string;
+}
+
+export class SearchSchedulesDto extends PaginatedQuery {
+    @ApiPropertyOptional({ example: 'uuid', description: 'Start location ID' })
+    @IsUUID()
+    @IsOptional()
+    startLocationId?: string;
+
+    @ApiPropertyOptional({ example: 'uuid', description: 'End location ID' })
+    @IsUUID()
+    @IsOptional()
+    endLocationId?: string;
+
+    @ApiPropertyOptional({
+        example: '2026-03-01',
+        description:
+            'Filter schedules active on this date (checks daysOfWeek and date range)',
+    })
+    @IsDateString()
+    @IsOptional()
+    date?: string;
+}
+
+export class SearchTripsDto extends PaginatedQuery {
+    @ApiPropertyOptional({ example: 'uuid', description: 'Start location ID' })
+    @IsUUID()
+    @IsOptional()
+    startLocationId?: string;
+
+    @ApiPropertyOptional({ example: 'uuid', description: 'End location ID' })
+    @IsUUID()
+    @IsOptional()
+    endLocationId?: string;
+
+    @ApiPropertyOptional({
+        type: Date,
+    })
+    @IsDate()
+    @Type(() => Date)
+    @IsOptional()
+    minDate?: Date;
+
+    @ApiPropertyOptional({
+        type: Date,
+    })
+    @IsDate()
+    @Type(() => Date)
+    @IsOptional()
+    maxDate?: Date;
+
+    @ApiPropertyOptional({ enum: TripStatus })
+    @IsEnum(TripStatus)
+    @IsOptional()
+    status?: TripStatus;
 }

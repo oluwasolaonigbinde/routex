@@ -81,7 +81,7 @@ function generateBoardingToken(
 
 function setTime(date: Date, hours: number, minutes: number): Date {
     const d = new Date(date);
-    d.setHours(hours, minutes, 0, 0);
+    d.setUTCHours(hours, minutes, 0, 0);
     return d;
 }
 
@@ -602,7 +602,7 @@ async function main() {
     console.log('📅 Upserting trip schedules...');
 
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setUTCHours(0, 0, 0, 0);
 
     const in30Days = new Date(today);
     in30Days.setDate(in30Days.getDate() + 30);

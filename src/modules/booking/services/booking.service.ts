@@ -1,16 +1,23 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '@/modules/database/database.service';
-import { CreateBookingDto, GetBookingsQueryDto } from '../dto/booking.dto';
+import {
+    CreateBookingDto,
+    CreateBookingFromScheduleDto,
+    GetBookingsQueryDto,
+} from '../dto/booking.dto';
 import {
     BookingNotFoundException,
     TripNotFoundException,
+    TripNotBookableException,
     InsufficientSeatsException,
     BookingCancellationNotAllowedException,
     BookingAlreadyCancelledException,
+    InvalidStopException,
 } from '../exceptions/booking.exception';
 import { PassengerService } from './passenger.service';
 import { PaymentService } from './payment.service';
+import { TripCreationService } from './trip-creation.service';
 import {
     BookingCreatedEvent,
     BookingConfirmedEvent,
@@ -23,9 +30,16 @@ import {
     Trip,
     PassengerTrip,
     Booking,
+    StopRole,
 } from '@prisma/client';
 import { nanoid } from 'nanoid';
 import { PaginatedResponse } from '@/types';
+import { UsersService } from '@/modules/user/users.service';
+import {
+    BookingWithDetailsInclude,
+    BookingWithDetails,
+    BookingWithPassengerTripsInclude,
+} from '../types/booking.types';
 
 @Injectable()
 export class BookingService {
@@ -33,24 +47,85 @@ export class BookingService {
 
     constructor(
         private readonly db: DatabaseService,
+        private readonly userService: UsersService,
         private readonly passengerService: PassengerService,
         private readonly paymentService: PaymentService,
+        private readonly tripCreationService: TripCreationService,
         private readonly eventEmitter: EventEmitter2,
     ) {}
 
     /**
      * Create a new booking with payment
      */
-    async createBooking(
-        userId: string,
-        userEmail: string,
-        dto: CreateBookingDto,
-    ) {
+    async createBookingFromTrip(userId: string, dto: CreateBookingDto) {
         this.logger.log(
             `Creating booking for user ${userId}, trip ${dto.outboundTripId}`,
         );
 
-        const passengerCount = dto.passengers.length;
+        return this.createBooking(userId, {
+            outboundTripId: dto.outboundTripId,
+            returnTripId: dto.returnTripId,
+            boardingStopId: dto.boardingStopId,
+            alightingStopId: dto.alightingStopId,
+            passengers: dto.passengers,
+        });
+    }
+
+    /**
+     * Create a booking from a trip schedule with lazy trip creation
+     */
+    async createBookingFromSchedule(
+        userId: string,
+        dto: CreateBookingFromScheduleDto,
+    ): Promise<{ booking: Booking; paymentUrl: string }> {
+        this.logger.log(
+            `Creating booking from schedule ${dto.tripScheduleId} for user ${userId} on ${dto.departureDate.toISOString()}`,
+        );
+
+        // Lazily get or create the trip for the requested schedule + date
+        const outboundTrip =
+            await this.tripCreationService.getOrCreateTripForSchedule(
+                dto.tripScheduleId,
+                dto.departureDate,
+            );
+
+        // Validate the resolved trip is bookable
+        if (outboundTrip.status !== TripStatus.SCHEDULED) {
+            throw new TripNotBookableException(
+                `Trip is in ${outboundTrip.status} status and cannot be booked`,
+            );
+        }
+
+        if (outboundTrip.departureTime <= new Date()) {
+            throw new TripNotBookableException(
+                'Trip departure time has already passed',
+            );
+        }
+
+        return this.createBooking(userId, {
+            outboundTripId: outboundTrip.id,
+            boardingStopId: dto.boardingStopId,
+            alightingStopId: dto.alightingStopId,
+            passengers: dto.passengers,
+        });
+    }
+
+    /**
+     * Shared booking transaction logic used by both createBookingFromTrip and createBookingFromSchedule
+     */
+    private async createBooking(
+        userId: string,
+        params: CreateBookingDto,
+    ): Promise<{ booking: Booking; paymentUrl: string }> {
+        const {
+            outboundTripId,
+            returnTripId,
+            boardingStopId,
+            alightingStopId,
+            passengers,
+        } = params;
+
+        const passengerCount = passengers.length;
 
         // Transaction with retry logic for concurrency
         let retries = 3;
@@ -60,13 +135,28 @@ export class BookingService {
                     async (tx) => {
                         // Lock and validate outbound trip
                         const outboundTrip = await tx.trip.findUnique({
-                            where: { id: dto.outboundTripId },
-                            include: { route: true },
+                            where: { id: outboundTripId },
+                            include: {
+                                route: {
+                                    include: {
+                                        routeStops: true,
+                                    },
+                                },
+                            },
                         });
 
                         if (!outboundTrip) {
-                            throw new TripNotFoundException(dto.outboundTripId);
+                            throw new TripNotFoundException(outboundTripId);
                         }
+
+                        // Validate boarding and alighting stops
+                        this.validateStops(
+                            outboundTrip.route.routeStops,
+                            outboundTrip.route.startLocationId,
+                            outboundTrip.route.endLocationId,
+                            boardingStopId,
+                            alightingStopId,
+                        );
 
                         if (outboundTrip.availableSeats < passengerCount) {
                             throw new InsufficientSeatsException(
@@ -77,15 +167,13 @@ export class BookingService {
 
                         // Validate return trip if provided
                         let returnTrip: Trip | null = null;
-                        if (dto.returnTripId) {
+                        if (returnTripId) {
                             returnTrip = await tx.trip.findUnique({
-                                where: { id: dto.returnTripId },
+                                where: { id: returnTripId },
                             });
 
                             if (!returnTrip) {
-                                throw new TripNotFoundException(
-                                    dto.returnTripId,
-                                );
+                                throw new TripNotFoundException(returnTripId);
                             }
 
                             if (returnTrip.availableSeats < passengerCount) {
@@ -100,7 +188,7 @@ export class BookingService {
                         const pricePerSeat =
                             outboundTrip.priceOverride ||
                             outboundTrip.route.basePrice;
-                        const totalPrice = dto.returnTripId
+                        const totalPrice = returnTripId
                             ? pricePerSeat * passengerCount * 2
                             : pricePerSeat * passengerCount;
 
@@ -111,15 +199,15 @@ export class BookingService {
                         const booking = await tx.booking.create({
                             data: {
                                 userId,
-                                outboundTripId: dto.outboundTripId,
-                                returnTripId: dto.returnTripId,
-                                boardingStopId: dto.boardingStopId,
-                                alightingStopId: dto.alightingStopId,
+                                outboundTripId,
+                                returnTripId,
+                                boardingStopId,
+                                alightingStopId,
                                 totalPrice,
                                 status: BookingStatus.PAYMENT_PENDING,
                                 paymentReference,
                                 passengers: {
-                                    create: dto.passengers.map((p) => ({
+                                    create: passengers.map((p) => ({
                                         firstName: p.firstName,
                                         lastName: p.lastName,
                                         phoneNumber: p.phoneNumber,
@@ -197,7 +285,13 @@ export class BookingService {
                             });
                         }
 
-                        return { booking, passengerTrips };
+                        const detailedBooking =
+                            await tx.booking.findUniqueOrThrow({
+                                where: { id: booking.id },
+                                include: BookingWithDetailsInclude,
+                            });
+
+                        return { booking: detailedBooking, passengerTrips };
                     },
                     {
                         isolationLevel:
@@ -207,9 +301,11 @@ export class BookingService {
                     },
                 );
 
+                const user = await this.userService.findUser({ id: userId });
+
                 // Initialize payment
                 const payment = await this.paymentService.initializeTransaction(
-                    userEmail,
+                    user.email,
                     result.booking.totalPrice,
                     result.booking.paymentReference!,
                     {
@@ -224,8 +320,8 @@ export class BookingService {
                     new BookingCreatedEvent(
                         result.booking.id,
                         userId,
-                        dto.outboundTripId,
-                        dto.returnTripId || null,
+                        outboundTripId,
+                        returnTripId || null,
                         result.booking.passengers.map((p) => ({
                             id: p.id,
                             firstName: p.firstName,
@@ -240,10 +336,9 @@ export class BookingService {
                     paymentUrl: payment.authorizationUrl,
                 };
             } catch (error) {
-                if (
-                    error.code === 'P2034' ||
-                    error.message?.includes('transaction')
-                ) {
+                const prismaError =
+                    error as Prisma.PrismaClientKnownRequestError;
+                if (prismaError.code === 'P2034') {
                     retries--;
                     if (retries > 0) {
                         this.logger.warn(
@@ -265,7 +360,7 @@ export class BookingService {
     /**
      * Confirm payment and update booking status
      */
-    async confirmPayment(reference: string): Promise<void> {
+    async confirmBooking(reference: string): Promise<void> {
         this.logger.log(`Confirming payment for reference: ${reference}`);
 
         const verification =
@@ -442,50 +537,10 @@ export class BookingService {
     /**
      * Get booking details by ID
      */
-    async getBookingById(bookingId: string) {
+    async getBookingById(bookingId: string): Promise<BookingWithDetails> {
         const booking = await this.db.booking.findUnique({
             where: { id: bookingId },
-            include: {
-                passengers: {
-                    include: {
-                        passengerTrips: {
-                            include: {
-                                trip: true,
-                            },
-                        },
-                    },
-                },
-                outboundTrip: {
-                    include: {
-                        route: {
-                            include: {
-                                startLocation: true,
-                                endLocation: true,
-                                routeStops: {
-                                    include: {
-                                        stop: true,
-                                    },
-                                    orderBy: {
-                                        sequence: 'asc',
-                                    },
-                                },
-                            },
-                        },
-                        vehicle: true,
-                    },
-                },
-                returnTrip: {
-                    include: {
-                        route: {
-                            include: {
-                                startLocation: true,
-                                endLocation: true,
-                            },
-                        },
-                        vehicle: true,
-                    },
-                },
-            },
+            include: BookingWithDetailsInclude,
         });
 
         if (!booking) {
@@ -501,21 +556,7 @@ export class BookingService {
     async getBoardingPasses(bookingId: string) {
         const booking = await this.db.booking.findUnique({
             where: { id: bookingId },
-            include: {
-                passengers: {
-                    include: {
-                        passengerTrips: {
-                            include: {
-                                trip: {
-                                    include: {
-                                        route: true,
-                                    },
-                                },
-                            },
-                        },
-                    },
-                },
-            },
+            include: BookingWithPassengerTripsInclude,
         });
 
         if (!booking) {
@@ -551,5 +592,95 @@ export class BookingService {
         }
 
         return passes;
+    }
+
+    /**
+     * Validate that boarding and alighting stops are valid route stops with correct roles
+     */
+    private validateStops(
+        routeStops: Array<{ stopId: string; sequence: number; role: StopRole }>,
+        startLocationId: string,
+        endLocationId: string,
+        boardingStopId?: string,
+        alightingStopId?: string,
+    ): void {
+        if (boardingStopId) {
+            // Cannot board at end location
+            if (boardingStopId === endLocationId) {
+                throw new InvalidStopException(
+                    boardingStopId,
+                    'Cannot board at the route end location',
+                );
+            }
+
+            const boardingStop = routeStops.find(
+                (rs) => rs.stopId === boardingStopId,
+            );
+
+            if (!boardingStop) {
+                throw new InvalidStopException(
+                    boardingStopId,
+                    'Stop is not part of this route',
+                );
+            }
+
+            if (
+                boardingStop.role !== StopRole.PICKUP_ONLY &&
+                boardingStop.role !== StopRole.PICKUP_AND_DROPOFF
+            ) {
+                throw new InvalidStopException(
+                    boardingStopId,
+                    'Stop does not allow pickup',
+                );
+            }
+        }
+
+        if (alightingStopId) {
+            // Cannot alight at start location
+            if (alightingStopId === startLocationId) {
+                throw new InvalidStopException(
+                    alightingStopId,
+                    'Cannot alight at the route start location',
+                );
+            }
+
+            const alightingStop = routeStops.find(
+                (rs) => rs.stopId === alightingStopId,
+            );
+
+            if (!alightingStop) {
+                throw new InvalidStopException(
+                    alightingStopId,
+                    'Stop is not part of this route',
+                );
+            }
+
+            if (
+                alightingStop.role !== StopRole.DROPOFF_ONLY &&
+                alightingStop.role !== StopRole.PICKUP_AND_DROPOFF
+            ) {
+                throw new InvalidStopException(
+                    alightingStopId,
+                    'Stop does not allow drop-off',
+                );
+            }
+        }
+
+        // Validate boarding comes before alighting in sequence
+        if (boardingStopId && alightingStopId) {
+            const boardingStop = routeStops.find(
+                (rs) => rs.stopId === boardingStopId,
+            )!;
+            const alightingStop = routeStops.find(
+                (rs) => rs.stopId === alightingStopId,
+            )!;
+
+            if (boardingStop.sequence >= alightingStop.sequence) {
+                throw new InvalidStopException(
+                    boardingStopId,
+                    'Boarding stop must come before alighting stop in the route sequence',
+                );
+            }
+        }
     }
 }

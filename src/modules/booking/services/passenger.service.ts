@@ -37,7 +37,7 @@ export class PassengerService {
     ): string {
         // Token expires 4 hours after scheduled departure
         const expirationTime = new Date(departureTime);
-        expirationTime.setHours(expirationTime.getHours() + 4);
+        expirationTime.setUTCHours(expirationTime.getHours() + 4);
 
         const payload: Omit<BoardingTokenPayload, 'exp'> = {
             sub: passengerTripId,
