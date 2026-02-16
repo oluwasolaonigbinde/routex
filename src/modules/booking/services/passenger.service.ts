@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { EnvironmentVariables } from '@/validators/env.validation';
 import {
     BoardingTokenExpiredException,
     BoardingTokenInvalidException,
-} from '../exceptions/booking.exception';
-import { EnvironmentVariables } from '@/validators/env.validation';
+} from '@/modules/booking/exceptions/trip.exception';
 
 interface BoardingTokenPayload {
-    sub: string; // passengerTripId
+    sub: string; // passengerId
     tripId: string;
     bookingId: string;
     exp: number;
@@ -23,24 +23,24 @@ export class PassengerService {
 
     /**
      * Generate a JWT boarding token for a passenger trip
-     * @param passengerTripId - The passenger trip ID
+     * @param passengerId - The passenger ID
      * @param tripId - The trip ID
      * @param bookingId - The booking ID
      * @param departureTime - Trip departure time
      * @returns JWT boarding token
      */
     generateBoardingToken(
-        passengerTripId: string,
+        passengerId: string,
         tripId: string,
         bookingId: string,
         departureTime: Date,
     ): string {
-        // Token expires 4 hours after scheduled departure
+        // Token expires 24 hours after scheduled departure
         const expirationTime = new Date(departureTime);
-        expirationTime.setUTCHours(expirationTime.getHours() + 4);
+        expirationTime.setUTCHours(expirationTime.getHours() + 24);
 
         const payload: Omit<BoardingTokenPayload, 'exp'> = {
-            sub: passengerTripId,
+            sub: passengerId,
             tripId,
             bookingId,
         };

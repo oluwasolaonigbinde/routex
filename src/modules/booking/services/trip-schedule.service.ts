@@ -1,18 +1,18 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '@/modules/database/database.service';
+import { RecurrencePattern, TripStatus, Prisma } from '@prisma/client';
 import {
     CreateTripScheduleDto,
-    UpdateTripScheduleDto,
     SearchSchedulesDto,
-} from '../dto/trip.dto';
+    UpdateTripScheduleDto,
+} from '@/modules/booking/dto/trip.dto';
 import {
-    TripScheduleNotFoundException,
     RouteNotFoundException,
     VehicleNotFoundException,
-} from '../exceptions/booking.exception';
-import { TripScheduleCreatedEvent } from '../events/booking.events';
-import { RecurrencePattern, TripStatus, Prisma } from '@prisma/client';
+} from '@/modules/booking/exceptions/booking.exception';
+import { TripScheduleCreatedEvent } from '@/modules/booking/events/trip.events';
+import { TripScheduleNotFoundException } from '@/modules/booking/exceptions/trip.exception';
 
 @Injectable()
 export class TripScheduleService {
@@ -90,6 +90,7 @@ export class TripScheduleService {
     /**
      * Generate trips for a schedule within a date range
      */
+    // TODO: A cron job should hadnle this (maybe generate 7 days in advance)
     async generateTripsForSchedule(
         scheduleId: string,
         startDate: Date,

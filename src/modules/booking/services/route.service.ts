@@ -1,19 +1,20 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '@/modules/database/database.service';
-import type { Prisma } from '@prisma/client';
+import type { Location, Prisma, Vehicle } from '@prisma/client';
 import {
     CreateLocationDto,
-    UpdateLocationDto,
-    CreateVehicleDto,
-    UpdateVehicleDto,
     CreateRouteDto,
-    UpdateRouteDto,
     CreateRouteStopDto,
-    UpdateRouteStopDto,
+    CreateVehicleDto,
     GetLocationsDto,
-    GetVehiclesDto,
     GetRoutesDto,
-} from '../dto/route.dto';
+    GetVehiclesDto,
+    UpdateLocationDto,
+    UpdateRouteDto,
+    UpdateRouteStopDto,
+    UpdateVehicleDto,
+} from '@/modules/booking/dto/route.dto';
+import { PaginatedResponse } from '@/types';
 
 @Injectable()
 export class RouteService {
@@ -21,7 +22,7 @@ export class RouteService {
 
     // ========== LOCATIONS ==========
 
-    async createLocation(dto: CreateLocationDto) {
+    async createLocation(dto: CreateLocationDto): Promise<Location> {
         return this.db.location.create({
             data: {
                 name: dto.name,
@@ -31,7 +32,9 @@ export class RouteService {
         });
     }
 
-    async listLocations(query: GetLocationsDto) {
+    async listLocations(
+        query: GetLocationsDto,
+    ): Promise<PaginatedResponse<Location>['data']> {
         const { page, limit } = query;
         const skip = (page - 1) * limit;
 
@@ -51,7 +54,7 @@ export class RouteService {
             this.db.location.count({ where }),
         ]);
 
-        return { totalCount, page, limit, results };
+        return { totalCount, page, limit, results, perPage: results.length };
     }
 
     async getLocation(id: string) {
@@ -91,7 +94,9 @@ export class RouteService {
         });
     }
 
-    async listVehicles(query: GetVehiclesDto) {
+    async listVehicles(
+        query: GetVehiclesDto,
+    ): Promise<PaginatedResponse<Vehicle>['data']> {
         const { page, limit } = query;
         const skip = (page - 1) * limit;
 
@@ -115,7 +120,7 @@ export class RouteService {
             this.db.vehicle.count({ where }),
         ]);
 
-        return { totalCount, page, limit, results };
+        return { totalCount, page, limit, results, perPage: results.length };
     }
 
     async getVehicle(id: string) {

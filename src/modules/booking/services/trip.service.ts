@@ -1,10 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '@/modules/database/database.service';
-import { Prisma, Trip } from '@prisma/client';
+import { PassengerTrip, Prisma, Trip } from '@prisma/client';
 import { PaginatedResponse } from '@/types';
-import { SearchTripsDto } from '../dto/trip.dto';
-import { TripNotFoundException } from '../exceptions/booking.exception';
-import { TripWithStopsInclude } from '../types';
+import {
+    SearchPassengerTripsDto,
+    SearchTripsDto,
+} from '@/modules/booking/dto/trip.dto';
+import { TripWithStopsInclude } from '@/modules/booking/types';
+import { TripNotFoundException } from '@/modules/booking/exceptions/trip.exception';
 
 @Injectable()
 export class TripService {
@@ -81,7 +84,7 @@ export class TripService {
         };
     }
 
-    async getTripById(id: string): Promise<TripWithStopsInclude> {
+    async getTripById(id: string): Promise<Trip> {
         const trip = await this.db.trip.findUnique({
             where: { id },
             include: TripWithStopsInclude,
@@ -92,5 +95,44 @@ export class TripService {
         }
 
         return trip;
+    }
+
+    async getPassengerTrips(
+        tripId: string,
+        filters: SearchPassengerTripsDto,
+    ): Promise<PaginatedResponse<PassengerTrip>['data']> {
+        const { page, limit } = filters;
+        const skip = (page - 1) * limit;
+
+        const where: Prisma.PassengerTripWhereInput = {
+            tripId,
+            trip: {
+                driverId: filters.driverId,
+            },
+        };
+
+        const [passengerTrips, totalCount] = await Promise.all([
+            this.db.passengerTrip.findMany({
+                where,
+                include: {
+                    passenger: true,
+                },
+                orderBy: [
+                    { passenger: { lastName: 'asc' } },
+                    { passenger: { firstName: 'asc' } },
+                ],
+                skip,
+                take: limit,
+            }),
+            this.db.passengerTrip.count({ where }),
+        ]);
+
+        return {
+            totalCount,
+            page,
+            limit,
+            results: passengerTrips,
+            perPage: passengerTrips.length,
+        };
     }
 }

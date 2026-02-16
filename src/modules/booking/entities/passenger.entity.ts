@@ -6,48 +6,7 @@ import {
     Passenger as PrismaPassenger,
 } from '@prisma/client';
 import { Type } from 'class-transformer';
-
-export class PassengerTrip implements PrismaPassengerTrip {
-    @ApiProperty({ type: String })
-    id: string;
-
-    @ApiProperty({ type: String })
-    passengerId: string;
-
-    @ApiProperty({ type: String })
-    tripId: string;
-
-    @ApiProperty({ type: String })
-    boardingToken: string;
-
-    @ApiProperty({ type: Number, nullable: true })
-    seatNo: number | null;
-
-    @ApiProperty({ type: Date, nullable: true })
-    boardedAt: Date | null;
-
-    @ApiProperty({ type: Date, nullable: true })
-    alightedAt: Date | null;
-
-    @ApiProperty({ type: Date, nullable: true })
-    boardingAttemptedAt: Date | null;
-
-    @ApiProperty({ type: String, nullable: true })
-    boardingFailureReason: string | null;
-}
-
-@ExposeAll()
-export class PassengerTripEntity extends PickType(PassengerTrip, [
-    'id',
-    'passengerId',
-    'tripId',
-    'boardingToken',
-    'seatNo',
-    'boardedAt',
-    'alightedAt',
-    'boardingAttemptedAt',
-    'boardingFailureReason',
-] as const) {}
+import { IsUUID } from 'class-validator';
 
 export class Passenger implements PrismaPassenger {
     @ApiProperty({ type: String })
@@ -72,6 +31,43 @@ export class Passenger implements PrismaPassenger {
     code: string;
 }
 
+export class PassengerTrip implements PrismaPassengerTrip {
+    @ApiProperty({ type: String })
+    id: string;
+
+    @ApiProperty({ type: String })
+    passengerId: string;
+
+    @ApiProperty({ type: String })
+    tripId: string;
+
+    @ApiProperty({ type: String })
+    boardingToken: string;
+
+    @ApiProperty({ type: Number, nullable: true })
+    seatNo: number | null;
+
+    @ApiProperty({ type: String })
+    @IsUUID()
+    alightingStopId: string;
+
+    @ApiProperty({ type: String })
+    @IsUUID()
+    boardingStopId: string;
+
+    @ApiProperty({ type: Date, nullable: true })
+    boardedAt: Date | null;
+
+    @ApiProperty({ type: Date, nullable: true })
+    alightedAt: Date | null;
+
+    @ApiProperty({ type: Date, nullable: true })
+    boardingAttemptedAt: Date | null;
+
+    @ApiProperty({ type: String, nullable: true })
+    boardingFailureReason: string | null;
+}
+
 @ExposeAll()
 export class PassengerEntity extends PickType(Passenger, [
     'id',
@@ -81,10 +77,46 @@ export class PassengerEntity extends PickType(Passenger, [
     'phoneNumber',
     'email',
     'code',
+] as const) {}
+
+@ExposeAll()
+export class PassengerTripEntity extends PickType(PassengerTrip, [
+    'id',
+    'passengerId',
+    'tripId',
+    'seatNo',
+    'boardedAt',
+    'alightedAt',
+    'boardingAttemptedAt',
+    'boardingFailureReason',
+    'alightingStopId',
+    'boardingStopId',
 ] as const) {
-    @ApiProperty({ type: [PassengerTripEntity], required: false })
-    @Type(() => PassengerTripEntity)
-    passengerTrips?: PassengerTripEntity[];
+    @ApiProperty({ type: PassengerEntity })
+    @Type(() => PassengerEntity)
+    passenger: PassengerEntity;
+}
+
+@ExposeAll()
+export class UserBookingPassengerTripEntity extends PickType(PassengerTrip, [
+    'id',
+    'passengerId',
+    'tripId',
+    'seatNo',
+    'boardedAt',
+    'alightedAt',
+    'boardingAttemptedAt',
+    'boardingFailureReason',
+    'boardingToken',
+    'alightingStopId',
+    'boardingStopId',
+]) {}
+
+@ExposeAll()
+export class UserBookingPassengerEntity extends PassengerEntity {
+    @ApiProperty({ type: [UserBookingPassengerTripEntity] })
+    @Type(() => UserBookingPassengerTripEntity)
+    passengerTrips: UserBookingPassengerTripEntity[];
 }
 
 // ========== Base Entities ==========

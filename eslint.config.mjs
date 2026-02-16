@@ -32,7 +32,7 @@ export default tseslint.config(
             'no-restricted-imports': [
                 'error',
                 {
-                    patterns: ['../*'],
+                    patterns: ['../*', "./*"],
                 },
             ],
             // 'prettier/prettier': [

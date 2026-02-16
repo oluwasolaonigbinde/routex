@@ -33,6 +33,7 @@ export class DriverEmbedEntity extends PickType(Driver, [
     'email',
     'firstName',
     'lastName',
+    'phone',
 ] as const) {}
 
 export class DriverAccessTokenClaims extends BaseUserAccessTokenClaims {}

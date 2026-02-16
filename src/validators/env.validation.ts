@@ -71,6 +71,18 @@ export class EnvironmentVariables {
 
     @IsOptional()
     ENCRYPTION_KEY: string;
+
+    @IsOptional()
+    @IsNumber()
+    @Type(() => Number)
+    @Min(1)
+    TRIP_START_WINDOW_BEFORE_MIN: number = 30;
+
+    @IsOptional()
+    @IsNumber()
+    @Type(() => Number)
+    @Min(1)
+    TRIP_START_WINDOW_AFTER_MIN: number = 30;
 }
 
 export function validate(config: Record<string, unknown>) {

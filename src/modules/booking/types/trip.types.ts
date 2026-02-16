@@ -19,6 +19,7 @@ export const TripWithStopsInclude = Prisma.validator<Prisma.TripInclude>()({
         },
     },
     vehicle: true,
+    driver: true,
 });
 
 export type TripWithStopsInclude = Prisma.TripGetPayload<{

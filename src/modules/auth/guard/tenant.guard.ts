@@ -1,9 +1,9 @@
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Tenant } from '@prisma/client';
-import { TENANT_KEY } from '../decorators/tenant.decorator';
-import { IS_PUBLIC_KEY } from '../decorators/public-route.decorator';
 import { AccessTokenDTO } from '@/types/auth';
+import { IS_PUBLIC_KEY } from '@/modules/auth/decorators/public-route.decorator';
+import { TENANT_KEY } from '@/modules/auth/decorators/tenant.decorator';
 
 @Injectable()
 export class TenantGuard implements CanActivate {
@@ -26,8 +26,6 @@ export class TenantGuard implements CanActivate {
         if (!tenant) {
             return true; // No tenant specified, allow access
         }
-
-        console.log('tenant');
 
         const { user } = context
             .switchToHttp()

@@ -1,12 +1,12 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 // import { LoggingInterceptor } from './interceptor/logger-interceptor';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
-import { ActionRequiredFilter } from './common/filters/action-required.filter';
-import { writeFileSync } from 'fs';
+import { AppModule } from '@/app.module';
+import { PrismaExceptionFilter } from '@/common/filters/prisma-exception.filter';
+import { ActionRequiredFilter } from '@/common/filters/action-required.filter';
+// import MockDate from 'mockdate';
 
 async function bootstrap() {
     const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -31,6 +31,8 @@ async function bootstrap() {
     app.set('trust proxy', 1);
     await app.listen(process.env.PORT || 4000);
 }
+// MockDate.set(new Date('2026-03-11T07:00:00.000Z'));
+
 bootstrap().catch((error: unknown) => {
     console.error('Unknown bootstrap error', error);
     process.exit(1);

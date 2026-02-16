@@ -1,10 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '@/modules/database/database.service';
-import {
-    TripScheduleNotFoundException,
-    ScheduleNotAvailableForDateException,
-    TripNotBookableException,
-} from '../exceptions/booking.exception';
 import {
     TripStatus,
     Trip,
@@ -13,14 +9,22 @@ import {
     StopStatus,
     Prisma,
 } from '@prisma/client';
-import { CreateAdHocTripDto } from '../dto/trip.dto';
-import { TripWithRouteBasicInclude, TripWithStopsInclude } from '../types';
+import { ScheduleNotAvailableForDateException } from '@/modules/booking/exceptions/booking.exception';
+import { CreateAdHocTripDto } from '@/modules/booking/dto/trip.dto';
+import { TripWithStopsInclude } from '@/modules/booking/types';
+import {
+    TripNotBookableException,
+    TripScheduleNotFoundException,
+} from '@/modules/booking/exceptions/trip.exception';
 
 @Injectable()
 export class TripCreationService {
     private readonly logger = new Logger(TripCreationService.name);
 
-    constructor(private readonly db: DatabaseService) {}
+    constructor(
+        private readonly db: DatabaseService,
+        private readonly configService: ConfigService,
+    ) {}
 
     /**
      * Get or create a trip for a schedule on a specific service date
@@ -89,6 +93,7 @@ export class TripCreationService {
                 routeId: schedule.routeId,
                 vehicleId: schedule.vehicleId,
                 departureTime: departureDateTime,
+                boardingOpensAt: this.getBoardingOpensAt(departureDateTime),
                 availableSeats: schedule.vehicle.totalSeats,
                 status: TripStatus.SCHEDULED,
                 tripScheduleId: schedule.id,
@@ -103,23 +108,7 @@ export class TripCreationService {
                 },
             },
             update: {},
-            include: {
-                route: {
-                    include: {
-                        startLocation: true,
-                        endLocation: true,
-                    },
-                },
-                vehicle: true,
-                tripStopStatuses: {
-                    include: {
-                        stop: true,
-                    },
-                    orderBy: {
-                        sequence: 'asc',
-                    },
-                },
-            },
+            include: TripWithStopsInclude,
         });
 
         this.logger.log(`Trip created/resolved with trip id: ${trip.id}`);
@@ -257,6 +246,7 @@ export class TripCreationService {
                 vehicleId: dto.vehicleId,
                 driverId: dto.driverId,
                 departureTime: dto.departureDate,
+                boardingOpensAt: this.getBoardingOpensAt(dto.departureDate),
                 availableSeats: vehicle.totalSeats,
                 priceOverride: dto.priceOverride,
                 status: TripStatus.SCHEDULED,
@@ -275,5 +265,15 @@ export class TripCreationService {
         this.logger.log(`Ad-hoc trip created with stop statuses: ${trip.id}`);
 
         return trip;
+    }
+
+    /**
+     * Compute the boarding-opens-at timestamp based on config.
+     */
+    private getBoardingOpensAt(departureTime: Date): Date {
+        const beforeMin =
+            this.configService.get<number>('TRIP_START_WINDOW_BEFORE_MIN') ??
+            30;
+        return new Date(departureTime.getTime() - beforeMin * 60 * 1000);
     }
 }

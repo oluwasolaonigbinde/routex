@@ -6,15 +6,14 @@ import {
     ValidateNested,
     ArrayMinSize,
     IsEnum,
-    IsDateString,
     ArrayMaxSize,
     IsDate,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty } from '@nestjs/swagger';
 import { BookingStatus, TripStatus } from '@prisma/client';
 import { PaginatedQuery } from '@/util/dto';
-import { CreatePassengerDto } from './passenger.dto';
+import { CreatePassengerDto } from '@/modules/booking/dto/passenger.dto';
 
 export class CreateBookingDto {
     @ApiProperty({ example: 'uuid', description: 'Outbound trip ID' })
@@ -32,7 +31,8 @@ export class CreateBookingDto {
 
     @ApiProperty({
         example: 'uuid',
-        description: 'Boarding stop location ID',
+        description:
+            'Boarding stop location ID. If not provided, defaults to the start location of the trip',
         required: false,
     })
     @IsUUID()
@@ -41,7 +41,8 @@ export class CreateBookingDto {
 
     @ApiProperty({
         example: 'uuid',
-        description: 'Alighting stop location ID',
+        description:
+            'Alighting stop location ID. If not provided, defaults to the end location of the trip',
         required: false,
     })
     @IsUUID()
@@ -105,7 +106,8 @@ export class CreateBookingFromScheduleDto {
 
     @ApiProperty({
         example: 'uuid',
-        description: 'Boarding stop location ID',
+        description:
+            'Boarding stop location ID. Defaults to the start location of the trip if not provided',
         required: false,
     })
     @IsUUID()
@@ -114,7 +116,8 @@ export class CreateBookingFromScheduleDto {
 
     @ApiProperty({
         example: 'uuid',
-        description: 'Alighting stop location ID',
+        description:
+            'Alighting stop location ID. Defaults to the end location of the trip if not provided',
         required: false,
     })
     @IsUUID()

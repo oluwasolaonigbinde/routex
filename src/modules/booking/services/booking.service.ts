@@ -1,33 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { DatabaseService } from '@/modules/database/database.service';
-import {
-    CreateBookingDto,
-    CreateBookingFromScheduleDto,
-    GetBookingsQueryDto,
-} from '../dto/booking.dto';
-import {
-    BookingNotFoundException,
-    TripNotFoundException,
-    TripNotBookableException,
-    InsufficientSeatsException,
-    BookingCancellationNotAllowedException,
-    BookingAlreadyCancelledException,
-    InvalidStopException,
-} from '../exceptions/booking.exception';
-import { PassengerService } from './passenger.service';
-import { PaymentService } from './payment.service';
-import { TripCreationService } from './trip-creation.service';
-import {
-    BookingCreatedEvent,
-    BookingConfirmedEvent,
-    BookingCancelledEvent,
-} from '../events/booking.events';
 import {
     Prisma,
     TripStatus,
     BookingStatus,
-    Trip,
     PassengerTrip,
     Booking,
     StopRole,
@@ -35,11 +13,35 @@ import {
 import { nanoid } from 'nanoid';
 import { PaginatedResponse } from '@/types';
 import { UsersService } from '@/modules/user/users.service';
+import { PassengerService } from '@/modules/booking/services/passenger.service';
+import { TripCreationService } from '@/modules/booking/services/trip-creation.service';
+import { PaymentService } from '@/modules/booking/services/payment.service';
 import {
-    BookingWithDetailsInclude,
+    CreateBookingDto,
+    CreateBookingFromScheduleDto,
+    GetBookingsQueryDto,
+} from '@/modules/booking/dto/booking.dto';
+import {
+    BookingAlreadyCancelledException,
+    BookingCancellationNotAllowedException,
+    BookingNotFoundException,
+    InsufficientSeatsException,
+    InvalidStopException,
+} from '@/modules/booking/exceptions/booking.exception';
+import {
     BookingWithDetails,
+    BookingWithDetailsInclude,
     BookingWithPassengerTripsInclude,
-} from '../types/booking.types';
+} from '@/modules/booking/types';
+import {
+    BookingCancelledEvent,
+    BookingConfirmedEvent,
+    BookingCreatedEvent,
+} from '@/modules/booking/events/booking.events';
+import {
+    TripNotBookableException,
+    TripNotFoundException,
+} from '@/modules/booking/exceptions/trip.exception';
 
 @Injectable()
 export class BookingService {
@@ -47,6 +49,7 @@ export class BookingService {
 
     constructor(
         private readonly db: DatabaseService,
+        private readonly configService: ConfigService,
         private readonly userService: UsersService,
         private readonly passengerService: PassengerService,
         private readonly paymentService: PaymentService,
@@ -88,19 +91,6 @@ export class BookingService {
                 dto.tripScheduleId,
                 dto.departureDate,
             );
-
-        // Validate the resolved trip is bookable
-        if (outboundTrip.status !== TripStatus.SCHEDULED) {
-            throw new TripNotBookableException(
-                `Trip is in ${outboundTrip.status} status and cannot be booked`,
-            );
-        }
-
-        if (outboundTrip.departureTime <= new Date()) {
-            throw new TripNotBookableException(
-                'Trip departure time has already passed',
-            );
-        }
 
         return this.createBooking(userId, {
             outboundTripId: outboundTrip.id,
@@ -149,6 +139,18 @@ export class BookingService {
                             throw new TripNotFoundException(outboundTripId);
                         }
 
+                        // only allow booking if trip is scheduled or boarding
+                        if (
+                            !(
+                                outboundTrip.status === TripStatus.SCHEDULED ||
+                                outboundTrip.status === TripStatus.BOARDING
+                            )
+                        ) {
+                            throw new TripNotBookableException(
+                                `Trip is in ${outboundTrip.status} status and cannot be booked`,
+                            );
+                        }
+
                         // Validate boarding and alighting stops
                         this.validateStops(
                             outboundTrip.route.routeStops,
@@ -166,14 +168,38 @@ export class BookingService {
                         }
 
                         // Validate return trip if provided
-                        let returnTrip: Trip | null = null;
+                        let returnTrip: Prisma.TripGetPayload<{
+                            include: {
+                                route: { include: { routeStops: true } };
+                            };
+                        }> | null = null;
+
                         if (returnTripId) {
                             returnTrip = await tx.trip.findUnique({
                                 where: { id: returnTripId },
+                                include: {
+                                    route: {
+                                        include: {
+                                            routeStops: true,
+                                        },
+                                    },
+                                },
                             });
 
                             if (!returnTrip) {
                                 throw new TripNotFoundException(returnTripId);
+                            }
+
+                            if (
+                                !(
+                                    returnTrip.status ===
+                                        TripStatus.SCHEDULED ||
+                                    returnTrip.status === TripStatus.BOARDING
+                                )
+                            ) {
+                                throw new TripNotBookableException(
+                                    `Return trip is in ${returnTrip.status} status and cannot be booked`,
+                                );
                             }
 
                             if (returnTrip.availableSeats < passengerCount) {
@@ -201,8 +227,12 @@ export class BookingService {
                                 userId,
                                 outboundTripId,
                                 returnTripId,
-                                boardingStopId,
-                                alightingStopId,
+                                boardingStopId:
+                                    boardingStopId ||
+                                    outboundTrip.route.startLocationId,
+                                alightingStopId:
+                                    alightingStopId ||
+                                    outboundTrip.route.endLocationId,
                                 totalPrice,
                                 status: BookingStatus.PAYMENT_PENDING,
                                 paymentReference,
@@ -239,6 +269,12 @@ export class BookingService {
                                     passengerId: passenger.id,
                                     tripId: outboundTrip.id,
                                     boardingToken: outboundBoardingToken,
+                                    boardingStopId:
+                                        boardingStopId ||
+                                        outboundTrip.route.startLocationId,
+                                    alightingStopId:
+                                        alightingStopId ||
+                                        outboundTrip.route.endLocationId,
                                 },
                             });
                             passengerTrips.push(outboundPT);
@@ -258,6 +294,10 @@ export class BookingService {
                                         passengerId: passenger.id,
                                         tripId: returnTrip.id,
                                         boardingToken: returnBoardingToken,
+                                        boardingStopId:
+                                            returnTrip.route.startLocationId,
+                                        alightingStopId:
+                                            returnTrip.route.endLocationId,
                                     },
                                 });
                                 passengerTrips.push(returnPT);
@@ -595,7 +635,9 @@ export class BookingService {
     }
 
     /**
-     * Validate that boarding and alighting stops are valid route stops with correct roles
+     * Validate that boarding and alighting stops are valid stops with correct roles
+     * Boarding can be at start location or intermediate stops with pickup role
+     * Alighting can be at end location or intermediate stops with dropoff role
      */
     private validateStops(
         routeStops: Array<{ stopId: string; sequence: number; role: StopRole }>,
@@ -613,25 +655,31 @@ export class BookingService {
                 );
             }
 
-            const boardingStop = routeStops.find(
-                (rs) => rs.stopId === boardingStopId,
-            );
+            // Boarding at start location is always allowed
+            const isBoardingAtStart = boardingStopId === startLocationId;
 
-            if (!boardingStop) {
-                throw new InvalidStopException(
-                    boardingStopId,
-                    'Stop is not part of this route',
+            if (!isBoardingAtStart) {
+                // Must be an intermediate stop with pickup role
+                const boardingStop = routeStops.find(
+                    (rs) => rs.stopId === boardingStopId,
                 );
-            }
 
-            if (
-                boardingStop.role !== StopRole.PICKUP_ONLY &&
-                boardingStop.role !== StopRole.PICKUP_AND_DROPOFF
-            ) {
-                throw new InvalidStopException(
-                    boardingStopId,
-                    'Stop does not allow pickup',
-                );
+                if (!boardingStop) {
+                    throw new InvalidStopException(
+                        boardingStopId,
+                        'Stop is not part of this route',
+                    );
+                }
+
+                if (
+                    boardingStop.role !== StopRole.PICKUP_ONLY &&
+                    boardingStop.role !== StopRole.PICKUP_AND_DROPOFF
+                ) {
+                    throw new InvalidStopException(
+                        boardingStopId,
+                        'Stop does not allow pickup',
+                    );
+                }
             }
         }
 
@@ -644,43 +692,57 @@ export class BookingService {
                 );
             }
 
-            const alightingStop = routeStops.find(
-                (rs) => rs.stopId === alightingStopId,
-            );
+            // Alighting at end location is always allowed
+            const isAlightingAtEnd = alightingStopId === endLocationId;
 
-            if (!alightingStop) {
-                throw new InvalidStopException(
-                    alightingStopId,
-                    'Stop is not part of this route',
+            if (!isAlightingAtEnd) {
+                // Must be an intermediate stop with dropoff role
+                const alightingStop = routeStops.find(
+                    (rs) => rs.stopId === alightingStopId,
                 );
-            }
 
-            if (
-                alightingStop.role !== StopRole.DROPOFF_ONLY &&
-                alightingStop.role !== StopRole.PICKUP_AND_DROPOFF
-            ) {
-                throw new InvalidStopException(
-                    alightingStopId,
-                    'Stop does not allow drop-off',
-                );
+                if (!alightingStop) {
+                    throw new InvalidStopException(
+                        alightingStopId,
+                        'Stop is not part of this route',
+                    );
+                }
+
+                if (
+                    alightingStop.role !== StopRole.DROPOFF_ONLY &&
+                    alightingStop.role !== StopRole.PICKUP_AND_DROPOFF
+                ) {
+                    throw new InvalidStopException(
+                        alightingStopId,
+                        'Stop does not allow drop-off',
+                    );
+                }
             }
         }
 
         // Validate boarding comes before alighting in sequence
+        // Only need to check if both are intermediate stops
         if (boardingStopId && alightingStopId) {
             const boardingStop = routeStops.find(
                 (rs) => rs.stopId === boardingStopId,
-            )!;
+            );
             const alightingStop = routeStops.find(
                 (rs) => rs.stopId === alightingStopId,
-            )!;
+            );
 
-            if (boardingStop.sequence >= alightingStop.sequence) {
-                throw new InvalidStopException(
-                    boardingStopId,
-                    'Boarding stop must come before alighting stop in the route sequence',
-                );
+            // If both are intermediate stops, check sequence order
+            if (boardingStop && alightingStop) {
+                if (boardingStop.sequence >= alightingStop.sequence) {
+                    throw new InvalidStopException(
+                        boardingStopId,
+                        'Boarding stop must come before alighting stop in the route sequence',
+                    );
+                }
             }
+            // Other cases are valid:
+            // - Boarding at start, alighting at intermediate or end
+            // - Boarding at intermediate, alighting at end
+            // - Boarding at start, alighting at end
         }
     }
 }

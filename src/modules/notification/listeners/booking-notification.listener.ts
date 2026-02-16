@@ -6,11 +6,13 @@ import {
     BookingCreatedEvent,
     BookingConfirmedEvent,
     BookingCancelledEvent,
+} from '@/modules/booking/events/booking.events';
+import {
     PassengerBoardedEvent,
     TripBoardingOpenEvent,
     TripStartedEvent,
     TripCompletedEvent,
-} from '@/modules/booking/events/booking.events';
+} from '@/modules/booking/events/trip.events';
 import { DatabaseService } from '@/modules/database/database.service';
 
 @Injectable()

@@ -10,7 +10,7 @@ import {
     IsNumber,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { StopRole } from '@prisma/client';
+import { Prisma, StopRole } from '@prisma/client';
 import { PaginatedQuery } from '@/util/dto';
 
 export class CreateLocationDto {
@@ -55,7 +55,7 @@ export class CreateVehicleDto {
 
 export class UpdateVehicleDto extends PartialType(CreateVehicleDto) {}
 
-export class CreateRouteDto {
+export class CreateRouteDto implements Prisma.RouteUncheckedCreateInput {
     @ApiProperty({ example: 'LAG-IBD-001', description: 'Route code' })
     @IsString()
     code: string;
@@ -95,7 +95,9 @@ export class CreateRouteDto {
 
 export class UpdateRouteDto extends PartialType(CreateRouteDto) {}
 
-export class CreateRouteStopDto {
+export class CreateRouteStopDto
+    implements Prisma.RouteStopUncheckedCreateInput
+{
     @ApiProperty({ example: 'uuid', description: 'Route ID' })
     @IsUUID()
     routeId: string;

@@ -113,6 +113,25 @@ export class RouteEntity extends PickType(Route, [
     routeStops?: RouteStopEntity[];
 }
 
+@ExposeAll()
+export class RouteWithoutStopsEntity extends PickType(Route, [
+    'id',
+    'code',
+    'startLocationId',
+    'endLocationId',
+    'basePrice',
+    'distanceKm',
+    'estimatedDurationMin',
+] as const) {
+    @ApiProperty({ type: LocationEntity, required: false })
+    @Type(() => LocationEntity)
+    startLocation?: LocationEntity;
+
+    @ApiProperty({ type: LocationEntity, required: false })
+    @Type(() => LocationEntity)
+    endLocation?: LocationEntity;
+}
+
 // ========== ApiResponse Wrappers ==========
 
 @ExposeAll()

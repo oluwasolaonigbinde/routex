@@ -11,11 +11,15 @@ import {
     StopRole,
 } from '@prisma/client';
 import { DriverEmbedEntity } from '@/modules/driver/entities/driver.entity';
-import { PassengerTripEntity } from './passenger.entity';
-import { LocationEntity, RouteEntity } from './route.entity';
 import { ApiResponse, PaginatedResponse } from '@/types';
-import { VehicleEntity } from './vehicle.entity';
-import { IsEnum } from 'class-validator';
+import { IsEnum, IsNumber, IsUUID } from 'class-validator';
+import {
+    LocationEntity,
+    RouteEntity,
+    RouteWithoutStopsEntity,
+} from '@/modules/booking/entities/route.entity';
+import { VehicleEntity } from '@/modules/booking/entities/vehicle.entity';
+import { PassengerTripEntity } from '@/modules/booking/entities/passenger.entity';
 
 export class TripSchedule implements PrismaTripSchedule {
     @ApiProperty({ type: String })
@@ -72,18 +76,23 @@ export class TripScheduleEntity extends PickType(TripSchedule, [
 
 export class TripStopStatus implements PrismaTripStopStatus {
     @ApiProperty({ type: String })
+    @IsUUID()
     id: string;
 
     @ApiProperty({ type: String })
+    @IsUUID()
     tripId: string;
 
     @ApiProperty({ type: String })
+    @IsUUID()
     stopId: string;
 
     @ApiProperty({ type: Number })
+    @IsNumber()
     sequence: number;
 
     @ApiProperty({ enum: StopStatus })
+    @IsEnum(StopStatus)
     status: StopStatus;
 
     @ApiProperty({ enum: StopRole })
@@ -132,6 +141,9 @@ export class Trip implements PrismaTrip {
     @ApiProperty({ type: Date })
     departureTime: Date;
 
+    @ApiProperty({ type: Date, nullable: true })
+    boardingOpensAt: Date | null;
+
     @ApiProperty({ type: Number })
     availableSeats: number;
 
@@ -159,11 +171,13 @@ export class TripEntity extends PickType(Trip, [
     'departureTime',
     'id',
     'priceOverride',
+    'boardingOpensAt',
     'routeId',
     'status',
     'tripScheduleDate',
     'tripScheduleId',
     'vehicleId',
+    'driverId',
 ] as const) {
     @ApiProperty({ type: VehicleEntity, required: false })
     @Type(() => VehicleEntity)
@@ -173,17 +187,13 @@ export class TripEntity extends PickType(Trip, [
     @Type(() => DriverEmbedEntity)
     driver?: DriverEmbedEntity | null;
 
-    @ApiProperty({ type: RouteEntity, required: false })
-    @Type(() => RouteEntity)
-    route?: RouteEntity;
+    @ApiProperty({ type: RouteWithoutStopsEntity, required: false })
+    @Type(() => RouteWithoutStopsEntity)
+    route?: RouteWithoutStopsEntity;
 
     @ApiProperty({ type: [TripStopStatusEntity], required: false })
     @Type(() => TripStopStatusEntity)
     tripStopStatuses?: TripStopStatusEntity[];
-
-    @ApiProperty({ type: [PassengerTripEntity], required: false })
-    @Type(() => PassengerTripEntity)
-    passengerTrips?: PassengerTripEntity[];
 }
 
 // ========== ApiResponse Wrappers ==========

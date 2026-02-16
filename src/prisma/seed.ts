@@ -483,99 +483,57 @@ async function main() {
     };
 
     const allStops: StopData[] = [
-        // Lagos -> Abuja
-        {
-            routeId: lagosAbuja.id,
-            stopId: IDS.jibowu,
-            sequence: 1,
-            role: 'PICKUP_ONLY',
-            departureOffsetMin: 0,
-        },
+        // Lagos -> Abuja (intermediate stops only)
         {
             routeId: lagosAbuja.id,
             stopId: IDS.berger,
-            sequence: 2,
+            sequence: 1,
             role: 'PICKUP_ONLY',
             departureOffsetMin: 30,
         },
         {
             routeId: lagosAbuja.id,
             stopId: IDS.ibadanToll,
-            sequence: 3,
+            sequence: 2,
             role: 'PICKUP_AND_DROPOFF',
             departureOffsetMin: 90,
         },
         {
             routeId: lagosAbuja.id,
             stopId: IDS.lokoja,
-            sequence: 4,
+            sequence: 3,
             role: 'PICKUP_AND_DROPOFF',
             departureOffsetMin: 360,
         },
         {
             routeId: lagosAbuja.id,
             stopId: IDS.zuba,
-            sequence: 5,
+            sequence: 4,
             role: 'DROPOFF_ONLY',
             departureOffsetMin: 480,
         },
-        {
-            routeId: lagosAbuja.id,
-            stopId: IDS.utako,
-            sequence: 6,
-            role: 'DROPOFF_ONLY',
-            departureOffsetMin: 540,
-        },
-        // Lagos -> Akure
-        {
-            routeId: lagosAkure.id,
-            stopId: IDS.jibowu,
-            sequence: 1,
-            role: 'PICKUP_ONLY',
-            departureOffsetMin: 0,
-        },
+        // Lagos -> Akure (intermediate stops only)
         {
             routeId: lagosAkure.id,
             stopId: IDS.berger,
-            sequence: 2,
+            sequence: 1,
             role: 'PICKUP_ONLY',
             departureOffsetMin: 30,
         },
         {
             routeId: lagosAkure.id,
             stopId: IDS.ore,
-            sequence: 3,
+            sequence: 2,
             role: 'PICKUP_AND_DROPOFF',
             departureOffsetMin: 120,
         },
-        {
-            routeId: lagosAkure.id,
-            stopId: IDS.akure,
-            sequence: 4,
-            role: 'DROPOFF_ONLY',
-            departureOffsetMin: 240,
-        },
-        // Abuja -> Lokoja
-        {
-            routeId: abujaLokoja.id,
-            stopId: IDS.utako,
-            sequence: 1,
-            role: 'PICKUP_ONLY',
-            departureOffsetMin: 0,
-        },
+        // Abuja -> Lokoja (intermediate stops only)
         {
             routeId: abujaLokoja.id,
             stopId: IDS.zuba,
-            sequence: 2,
+            sequence: 1,
             role: 'PICKUP_ONLY',
             departureOffsetMin: 30,
-        },
-        {
-            routeId: abujaLokoja.id,
-            stopId: IDS.lokoja,
-            sequence: 3,
-            role: 'DROPOFF_ONLY',
-            departureOffsetMin: 150,
         },
     ];
 
@@ -869,6 +827,22 @@ async function main() {
             }>;
         }>;
     }) {
+        // Fetch the outbound trip with route to get fallback values
+        const outboundTrip = await prisma.trip.findUnique({
+            where: { id: def.outboundTripId },
+            include: { route: true },
+        });
+
+        if (!outboundTrip) {
+            throw new Error(`Trip ${def.outboundTripId} not found`);
+        }
+
+        // Use COALESCE logic: booking stops if provided, otherwise route start/end
+        const actualBoardingStopId =
+            def.boardingStopId ?? outboundTrip.route.startLocationId;
+        const actualAlightingStopId =
+            def.alightingStopId ?? outboundTrip.route.endLocationId;
+
         const booking = await prisma.booking.upsert({
             where: { paymentReference: def.paymentRef },
             update: {},
@@ -878,8 +852,8 @@ async function main() {
                 outboundTripId: def.outboundTripId,
                 returnTripId: def.returnTripId,
                 totalPrice: def.totalPrice,
-                boardingStopId: def.boardingStopId,
-                alightingStopId: def.alightingStopId,
+                boardingStopId: actualBoardingStopId,
+                alightingStopId: actualAlightingStopId,
                 paymentReference: def.paymentRef,
                 paymentMethod: def.paymentMethod,
                 paidAt: def.paidAt,
@@ -915,6 +889,8 @@ async function main() {
                         id: pt.ptId,
                         passengerId: passenger.id,
                         tripId: pt.tripId,
+                        boardingStopId: actualBoardingStopId,
+                        alightingStopId: actualAlightingStopId,
                         boardingToken: generateBoardingToken(
                             pt.ptId,
                             pt.tripId,

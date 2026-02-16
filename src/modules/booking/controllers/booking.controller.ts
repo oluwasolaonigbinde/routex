@@ -8,29 +8,27 @@ import {
     Query,
     HttpCode,
     HttpStatus,
-    UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import {
-    CreateBookingDto,
-    CreateBookingFromScheduleDto,
-    GetBookingsQueryDto,
-    CancelBookingDto,
-} from '../dto/booking.dto';
 import { Tenant } from '@/modules/auth/decorators/tenant.decorator';
 import type { AccessTokenDTO } from '@/types/auth';
-import { BookingOwnershipGuard } from '../guards/booking-ownership.guard';
 import { UserToken } from '@/decorators/user';
 import { SerializeOptions } from '@/util/decorator';
-import {
-    CreateBookingApiResponse,
-    BookingListApiResponse,
-    BookingEntityApiResponse,
-    BoardingPassListResponse,
-} from '../entities/booking.entity';
 import { PaginatedResponse } from '@/types';
 import { Booking } from '@prisma/client';
 import { BookingService } from '@/modules/booking/services/booking.service';
+import {
+    BoardingPassListResponse,
+    BookingEntityApiResponse,
+    BookingListApiResponse,
+    CreateBookingApiResponse,
+} from '@/modules/booking/entities/booking.entity';
+import {
+    CancelBookingDto,
+    CreateBookingDto,
+    CreateBookingFromScheduleDto,
+    GetBookingsQueryDto,
+} from '@/modules/booking/dto/booking.dto';
 
 @Controller('booking')
 @ApiTags('Booking')
@@ -124,7 +122,6 @@ export class BookingController {
     }
 
     @Get(':id')
-    @UseGuards(BookingOwnershipGuard)
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Get booking details' })
     @ApiResponse({
@@ -147,7 +144,6 @@ export class BookingController {
     }
 
     @Patch(':id/cancel')
-    @UseGuards(BookingOwnershipGuard)
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Cancel a booking' })
     @ApiResponse({
@@ -172,7 +168,6 @@ export class BookingController {
     }
 
     @Get(':id/boarding-passes')
-    @UseGuards(BookingOwnershipGuard)
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Get boarding passes for a booking' })
     @ApiResponse({

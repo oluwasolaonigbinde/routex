@@ -14,28 +14,27 @@ import {
     ApiOperation,
     ApiResponse as SwaggerResponse,
 } from '@nestjs/swagger';
-import { TripScheduleService } from '../services/trip-schedule.service';
-import { TripExecutionService } from '../services/trip-execution.service';
-import { TripCreationService } from '../services/trip-creation.service';
-import { DatabaseService } from '@/modules/database/database.service';
-import {
-    CreateTripScheduleDto,
-    UpdateTripScheduleDto,
-    CreateAdHocTripDto,
-    AssignDriverDto,
-    GenerateTripsDto,
-} from '../dto/trip.dto';
 import { Tenant } from '@/modules/auth/decorators/tenant.decorator';
 import { RolesRequired } from '@/modules/auth/decorators/roles.decorator';
 import { Prisma, Role } from '@prisma/client';
 import { SerializeOptions } from '@/util/decorator';
+import { TripScheduleService } from '@/modules/booking/services/trip-schedule.service';
+import { DatabaseService } from '@/modules/database/database.service';
 import {
-    GenerateTripsApiResponse,
     TripEntityApiResponse,
     TripListApiResponse,
     TripScheduleEntityApiResponse,
     TripScheduleListApiResponse,
-} from '../entities/trip.entity';
+} from '@/modules/booking/entities/trip.entity';
+import {
+    AssignDriverDto,
+    CreateAdHocTripDto,
+    CreateTripScheduleDto,
+    UpdateTripScheduleDto,
+} from '@/modules/booking/dto/trip.dto';
+import { TripCreationService } from '@/modules/booking/services/trip-creation.service';
+import { TripService } from '@/modules/booking/services/trip.service';
+import { TripExecutionService } from '@/modules/booking/services/trip-execution.service';
 
 @Controller('admin/trips')
 @ApiTags('Admin - Trips')
@@ -44,9 +43,10 @@ import {
 export class TripAdminController {
     constructor(
         private readonly tripScheduleService: TripScheduleService,
-        private readonly tripExecutionService: TripExecutionService,
         private readonly tripCreationService: TripCreationService,
         private readonly db: DatabaseService,
+        private readonly tripExecutionService: TripExecutionService,
+        private readonly tripService: TripService,
     ) {}
 
     @Post('schedules')
@@ -98,35 +98,6 @@ export class TripAdminController {
             status: 'success',
             message: 'Trip schedule updated successfully',
             data: schedule,
-        };
-    }
-
-    @Post('schedules/:id/generate')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Generate trips for a schedule' })
-    @SwaggerResponse({
-        status: 200,
-        description: 'Trips generated successfully',
-        type: GenerateTripsApiResponse,
-    })
-    @SerializeOptions({
-        type: GenerateTripsApiResponse,
-        strategy: 'excludeAll',
-    })
-    async generateTrips(
-        @Param('id') id: string,
-        @Body() dto: GenerateTripsDto,
-    ): Promise<GenerateTripsApiResponse> {
-        const count = await this.tripScheduleService.generateTripsForSchedule(
-            id,
-            new Date(dto.startDate),
-            new Date(dto.endDate),
-        );
-
-        return {
-            status: 'success',
-            message: `Generated ${count} trips`,
-            data: { count },
         };
     }
 
@@ -272,7 +243,7 @@ export class TripAdminController {
 
     @Get(':id')
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Get trip details' })
+    @ApiOperation({ summary: 'Get trip' })
     @SwaggerResponse({
         status: 200,
         description: 'Trip retrieved successfully',
@@ -280,8 +251,7 @@ export class TripAdminController {
     })
     @SerializeOptions({ type: TripEntityApiResponse, strategy: 'excludeAll' })
     async getTripById(@Param('id') id: string): Promise<TripEntityApiResponse> {
-        const trip =
-            await this.tripExecutionService.getTripExecutionDetails(id);
+        const trip = await this.tripService.getTripById(id);
 
         return {
             status: 'success',

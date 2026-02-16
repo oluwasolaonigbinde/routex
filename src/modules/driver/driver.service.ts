@@ -8,11 +8,6 @@ import { Tokens, UserAccessTokenClaims } from '@/types/auth';
 import type { Driver, Prisma } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
 import { StorageService } from '@/storage/storage.service';
-import {
-    UserWithEmailNotFoundException,
-    UserWithIdNotFoundException,
-    UserWithUsernameNotFoundException,
-} from '@/common/exception/exception';
 import { AbstractAuthService } from '@/modules/auth/auth.service';
 import { DatabaseService } from '@/modules/database/database.service';
 import { SessionService } from '@/modules/session/session.service';
@@ -32,6 +27,11 @@ import { DriverCreatedEvent } from '@/modules/driver/events/driver-created.event
 import { UserPasswordResetRequestedEvent } from '@/modules/user/events/user-password-reset-requested.event';
 import { UserPasswordChangedEvent } from '@/modules/user/events/user-password-changed.event';
 import { DRIVER_EVENTS } from '@/modules/driver/types/events';
+import {
+    DriverWithEmailNotFoundException,
+    DriverWithIdNotFoundException,
+    DriverWithUsernameNotFoundException,
+} from '@/modules/driver/exceptions/auth';
 
 @Injectable()
 export class DriverService extends AbstractAuthService {
@@ -217,11 +217,11 @@ export class DriverService extends AbstractAuthService {
 
         if (!user) {
             if (username) {
-                throw new UserWithUsernameNotFoundException(username);
+                throw new DriverWithUsernameNotFoundException(username);
             } else if (email) {
-                throw new UserWithEmailNotFoundException(email);
+                throw new DriverWithEmailNotFoundException(email);
             } else if (id) {
-                throw new UserWithIdNotFoundException(id);
+                throw new DriverWithIdNotFoundException(id);
             } else {
                 throw new NotFoundException('User not found');
             }

@@ -3,8 +3,12 @@ import { Booking as PrismaBooking, BookingStatus } from '@prisma/client';
 import { ExposeAll } from '@/util/decorator';
 import { Type } from 'class-transformer';
 import type { ApiResponse, PaginatedResponse } from '@/types';
-import { TripEntity } from './trip.entity';
-import { PassengerEntity } from './passenger.entity';
+import { IsNumber, IsOptional, IsString } from 'class-validator';
+import {
+    PassengerTripEntity,
+    UserBookingPassengerEntity,
+} from '@/modules/booking/entities/passenger.entity';
+import { TripEntity } from '@/modules/booking/entities/trip.entity';
 
 // ========== Base Entities ==========
 
@@ -22,18 +26,24 @@ export class Booking implements PrismaBooking {
     returnTripId: string | null;
 
     @ApiProperty({ type: Number })
+    @IsNumber()
     totalPrice: number;
 
-    @ApiProperty({ type: String, nullable: true })
-    boardingStopId: string | null;
+    @ApiProperty({ type: String })
+    @IsString()
+    boardingStopId: string;
+
+    @ApiProperty({ type: String })
+    @IsString()
+    alightingStopId: string;
 
     @ApiProperty({ type: String, nullable: true })
-    alightingStopId: string | null;
-
-    @ApiProperty({ type: String, nullable: true })
+    @IsOptional()
+    @IsString()
     paymentReference: string | null;
 
     @ApiProperty({ type: String, nullable: true })
+    @IsString()
     paymentMethod: string | null;
 
     @ApiProperty({ type: Date, nullable: true })
@@ -61,9 +71,9 @@ export class BookingEntity extends PickType(Booking, [
     'status',
     'createdAt',
 ] as const) {
-    @ApiProperty({ type: [PassengerEntity], required: false })
-    @Type(() => PassengerEntity)
-    passengers?: PassengerEntity[];
+    @ApiProperty({ type: [UserBookingPassengerEntity], required: false })
+    @Type(() => UserBookingPassengerEntity)
+    passengers?: UserBookingPassengerEntity[];
 
     @ApiProperty({ type: TripEntity, required: false })
     @Type(() => TripEntity)
@@ -116,18 +126,6 @@ export class CreateBookingApiResponse implements ApiResponse<CreateBookingData> 
     @ApiProperty({ type: CreateBookingData })
     @Type(() => CreateBookingData)
     data?: CreateBookingData;
-}
-
-@ExposeAll()
-class BookingPagination {
-    @ApiProperty({ type: Number })
-    page: number;
-
-    @ApiProperty({ type: Number })
-    limit: number;
-
-    @ApiProperty({ type: Number })
-    total: number;
 }
 
 type BookingPaginatedResponse = PaginatedResponse<BookingEntity>['data'];
@@ -217,48 +215,30 @@ export class BoardingPassListResponse implements ApiResponse<
 
 // ========== Driver-specific Responses ==========
 
+type PassengerPaginatedResponse =
+    PaginatedResponse<PassengerTripEntity>['data'];
+
 @ExposeAll()
-class BoardingStatusPassenger {
-    @ApiProperty({ type: String })
-    passengerId: string;
+class PassengersListResult implements PassengerPaginatedResponse {
+    @ApiProperty({ type: Number })
+    totalCount: number;
 
-    @ApiProperty({ type: String })
-    passengerName: string;
+    @ApiProperty({ type: Number })
+    page: number;
 
-    @ApiProperty({ type: String })
-    passengerCode: string;
+    @ApiProperty({ type: Number })
+    limit: number;
 
-    @ApiProperty({ type: String })
-    phoneNumber: string;
+    @ApiProperty({ type: Number })
+    perPage: number;
 
-    @ApiProperty({ nullable: true })
-    boardedAt: Date | null;
-
-    @ApiProperty({ nullable: true })
-    seatNo: number | null;
-
-    @ApiProperty({ type: String, enum: ['BOARDED', 'PENDING'] })
-    status: 'BOARDED' | 'PENDING';
+    @ApiProperty({ type: [PassengerTripEntity] })
+    @Type(() => PassengerTripEntity)
+    results: PassengerTripEntity[];
 }
 
 @ExposeAll()
-class BoardingStatusData {
-    @ApiProperty({ type: Number })
-    totalPassengers: number;
-
-    @ApiProperty({ type: Number })
-    boardedCount: number;
-
-    @ApiProperty({ type: Number })
-    pendingCount: number;
-
-    @ApiProperty({ type: [BoardingStatusPassenger] })
-    @Type(() => BoardingStatusPassenger)
-    passengers: BoardingStatusPassenger[];
-}
-
-@ExposeAll()
-export class BoardingStatusApiResponse implements ApiResponse<BoardingStatusData> {
+export class PassengersListApiResponse implements PaginatedResponse<PassengerTripEntity> {
     @ApiProperty({
         type: String,
         enum: ['pending', 'success', 'failed', 'processing'],
@@ -268,7 +248,7 @@ export class BoardingStatusApiResponse implements ApiResponse<BoardingStatusData
     @ApiProperty({ type: String })
     message: string;
 
-    @ApiProperty({ type: BoardingStatusData })
-    @Type(() => BoardingStatusData)
-    data?: BoardingStatusData;
+    @ApiProperty({ type: PassengersListResult })
+    @Type(() => PassengersListResult)
+    data: PassengersListResult;
 }

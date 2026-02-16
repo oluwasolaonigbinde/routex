@@ -8,22 +8,23 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { DatabaseService } from '@/modules/database/database.service';
-import { Public } from '@/modules/auth/decorators/public-route.decorator';
 import { SerializeOptions } from '@/util/decorator';
 import {
     TripEntityApiResponse,
     TripListApiResponse,
-} from '../entities/trip.entity';
-import { TripService } from '../services/trip.service';
-import { SearchTripsDto } from '../dto/trip.dto';
+} from '@/modules/booking/entities/trip.entity';
+import { SearchTripsDto } from '@/modules/booking/dto/trip.dto';
+import { Tenant } from '@/modules/auth/decorators/tenant.decorator';
+import { TripUserService } from '@/modules/booking/services/trip.user.service';
+import { UserSearchTripsDto } from '@/modules/booking/dto/trip.user.dto';
 
 @Controller('trips')
 @ApiTags('Trips')
-@Public()
+@Tenant('USER')
 export class TripController {
     constructor(
         private readonly db: DatabaseService,
-        private readonly tripService: TripService,
+        private readonly tripService: TripUserService,
     ) {}
 
     @Get('search')
@@ -35,10 +36,9 @@ export class TripController {
         type: TripListApiResponse,
     })
     @SerializeOptions({ type: TripListApiResponse, strategy: 'excludeAll' })
-    async searchTrips(@Query() query: SearchTripsDto) {
+    async searchTrips(@Query() query: UserSearchTripsDto) {
         const trips = await this.tripService.searchTrips(query);
 
-        console.log('trips', trips);
         return {
             status: 'success',
             message: `Found ${trips.results.length} available trips`,
@@ -48,7 +48,7 @@ export class TripController {
 
     @Get(':id')
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Get trip details' })
+    @ApiOperation({ summary: 'Get trip' })
     @ApiResponse({
         status: 200,
         description: 'Trip retrieved successfully',

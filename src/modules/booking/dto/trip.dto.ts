@@ -222,4 +222,16 @@ export class SearchTripsDto extends PaginatedQuery {
     @IsEnum(TripStatus)
     @IsOptional()
     status?: TripStatus;
+
+    @ApiPropertyOptional({ example: 'uuid', description: 'Driver ID' })
+    @IsUUID()
+    @IsOptional()
+    driverId?: string;
+}
+
+export class SearchPassengerTripsDto extends PaginatedQuery {
+    @ApiPropertyOptional({ example: 'uuid', description: 'Driver ID' })
+    @IsUUID()
+    @IsOptional()
+    driverId?: string;
 }

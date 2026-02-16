@@ -1,6 +1,5 @@
+import { TripWithStopsInclude } from '@/modules/booking/types/trip.types';
 import { Prisma } from '@prisma/client';
-import { TripWithStopsInclude } from './trip.types';
-
 
 /**
  * Standard include for detailed booking queries

@@ -173,12 +173,14 @@ model Location {
     latitude  Float?
     longitude Float?
 
-    startRoutes       Route[]          @relation("RouteStart")
-    endRoutes         Route[]          @relation("RouteEnd")
-    routeStops        RouteStop[]
-    tripStopStatuses  TripStopStatus[]
-    boardingBookings  Booking[]        @relation("BoardingStop")
-    alightingBookings Booking[]        @relation("AlightingStop")
+    startRoutes             Route[]          @relation("RouteStart")
+    endRoutes               Route[]          @relation("RouteEnd")
+    routeStops              RouteStop[]
+    tripStopStatuses        TripStopStatus[]
+    boardingBookings        Booking[]        @relation("BoardingStop")
+    alightingBookings       Booking[]        @relation("AlightingStop")
+    boardingPassengerTrips  PassengerTrip[]  @relation("BoardingStop")
+    alightingPassengerTrips PassengerTrip[]  @relation("AlightingStop")
 }
 
 model Vehicle {
@@ -221,18 +223,19 @@ model RouteStop {
 }
 
 model Trip {
-    id             String     @id @default(uuid())
-    code           String     @unique
-    routeId        String
-    vehicleId      String
-    driverId       String?
-    departureTime  DateTime
-    availableSeats Int
-    priceOverride  Int?
-    status         TripStatus @default(SCHEDULED)
-    route          Route      @relation(fields: [routeId], references: [id])
-    vehicle        Vehicle    @relation(fields: [vehicleId], references: [id])
-    driver         Driver?    @relation(fields: [driverId], references: [id])
+    id              String     @id @default(uuid())
+    code            String     @unique
+    routeId         String
+    vehicleId       String
+    driverId        String?
+    departureTime   DateTime
+    boardingOpensAt DateTime?
+    availableSeats  Int
+    priceOverride   Int?
+    status          TripStatus @default(SCHEDULED)
+    route           Route      @relation(fields: [routeId], references: [id])
+    vehicle         Vehicle    @relation(fields: [vehicleId], references: [id])
+    driver          Driver?    @relation(fields: [driverId], references: [id])
 
     outboundBookings Booking[]        @relation("OutboundTrip")
     returnBookings   Booking[]        @relation("ReturnTrip")
@@ -245,6 +248,7 @@ model Trip {
     @@unique([tripScheduleId, tripScheduleDate])
     @@index([driverId])
     @@index([status, departureTime])
+    @@index([status, boardingOpensAt])
 }
 
 model TripStopStatus {
@@ -269,8 +273,8 @@ model Booking {
     outboundTripId   String
     returnTripId     String?
     totalPrice       Int
-    boardingStopId   String?
-    alightingStopId  String?
+    boardingStopId   String
+    alightingStopId  String
     paymentReference String?   @unique
     paymentMethod    String?
     paidAt           DateTime?
@@ -278,9 +282,9 @@ model Booking {
     status    BookingStatus @default(PENDING)
     createdAt DateTime      @default(now())
 
-    user          User      @relation(fields: [userId], references: [id])
-    boardingStop  Location? @relation("BoardingStop", fields: [boardingStopId], references: [id])
-    alightingStop Location? @relation("AlightingStop", fields: [alightingStopId], references: [id])
+    user          User     @relation(fields: [userId], references: [id])
+    boardingStop  Location @relation("BoardingStop", fields: [boardingStopId], references: [id])
+    alightingStop Location @relation("AlightingStop", fields: [alightingStopId], references: [id])
 
     outboundTrip Trip        @relation("OutboundTrip", fields: [outboundTripId], references: [id])
     returnTrip   Trip?       @relation("ReturnTrip", fields: [returnTripId], references: [id])
@@ -320,6 +324,8 @@ model PassengerTrip {
     id                    String    @id @default(uuid())
     passengerId           String
     tripId                String
+    boardingStopId        String
+    alightingStopId       String
     boardingToken         String    @unique
     seatNo                Int?
     boardedAt             DateTime?
@@ -327,8 +333,10 @@ model PassengerTrip {
     boardingAttemptedAt   DateTime?
     boardingFailureReason String?
 
-    passenger Passenger @relation(fields: [passengerId], references: [id])
-    trip      Trip      @relation(fields: [tripId], references: [id])
+    passenger     Passenger @relation(fields: [passengerId], references: [id])
+    trip          Trip      @relation(fields: [tripId], references: [id])
+    boardingStop  Location  @relation("BoardingStop", fields: [boardingStopId], references: [id])
+    alightingStop Location  @relation("AlightingStop", fields: [alightingStopId], references: [id])
 
     @@unique([passengerId, tripId])
 }

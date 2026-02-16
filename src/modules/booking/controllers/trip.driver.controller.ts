@@ -2,27 +2,22 @@ import {
     Controller,
     Post,
     Get,
-    Patch,
     Body,
     Param,
     Query,
     HttpCode,
     HttpStatus,
-    UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { BoardingService } from '@/modules/booking/services/boarding.service';
 import { TripExecutionService } from '@/modules/booking/services/trip-execution.service';
 import { DatabaseService } from '@/modules/database/database.service';
 import {
     BoardPassengerDto,
-    UpdateTripStatusDto,
     UpdateStopStatusDto,
 } from '@/modules/booking/dto/trip.dto';
 import { Tenant } from '@/modules/auth/decorators/tenant.decorator';
 import type { AccessTokenDTO } from '@/types/auth';
-import { DriverAssignmentGuard } from '@/modules/booking/guards/driver-assignment.guard';
-import { TripStatus } from '@prisma/client';
+import { PassengerTrip, TripStatus } from '@prisma/client';
 import { UserToken } from '@/decorators/user';
 import { SerializeOptions } from '@/util/decorator';
 import {
@@ -31,16 +26,20 @@ import {
     TripStopStatusApiResponse,
 } from '@/modules/booking/entities/trip.entity';
 import { PassengerTripApiResponse } from '@/modules/booking/entities/passenger.entity';
-import { BoardingStatusApiResponse } from '@/modules/booking/entities/booking.entity';
+import { PassengersListApiResponse } from '@/modules/booking/entities/booking.entity';
+import { PaginatedResponse } from '@/util/dto';
+import { TripService } from '@/modules/booking/services/trip.service';
+import { DriverSearchPassengerTripsDto } from '@/modules/booking/dto/trip.driver.dto';
+import type { DriverAccessTokenDTO } from '@/modules/driver/entities/driver.entity';
 
-@Controller('driver')
+@Controller('driver/trips')
 @ApiTags('Driver Trips Management')
 @Tenant('DRIVER')
 export class DriverTripsController {
     constructor(
-        private readonly boardingService: BoardingService,
         private readonly tripExecutionService: TripExecutionService,
         private readonly db: DatabaseService,
+        private readonly tripService: TripService,
     ) {}
 
     @Post('board-passenger')
@@ -56,10 +55,10 @@ export class DriverTripsController {
         strategy: 'excludeAll',
     })
     async boardPassenger(
-        @UserToken() user: AccessTokenDTO,
+        @UserToken() user: DriverAccessTokenDTO,
         @Body() dto: BoardPassengerDto,
     ): Promise<PassengerTripApiResponse> {
-        const result = await this.boardingService.boardPassenger(
+        const result = await this.tripExecutionService.boardPassenger(
             user.sub,
             dto.boardingToken,
         );
@@ -73,116 +72,169 @@ export class DriverTripsController {
         };
     }
 
-    @Get('trips')
+    @Post('alight-passenger')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Alight a passenger by scanning QR code' })
+    @ApiResponse({
+        status: 200,
+        description: 'Passenger alighted successfully',
+        type: PassengerTripApiResponse,
+    })
+    @SerializeOptions({
+        type: PassengerTripApiResponse,
+        strategy: 'excludeAll',
+    })
+    async alightPassenger(
+        @UserToken() user: DriverAccessTokenDTO,
+        @Body() dto: BoardPassengerDto,
+    ): Promise<PassengerTripApiResponse> {
+        const result = await this.tripExecutionService.alightPassenger(
+            user.sub,
+            dto.boardingToken,
+        );
+
+        return {
+            status: 'success',
+            message: result.alreadyAlighted
+                ? 'Passenger already alighted'
+                : 'Passenger alighted successfully',
+            data: result.passengerTrip,
+        };
+    }
+
+    @Get('assigned')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Get assigned trips for driver' })
     @ApiResponse({
         status: 200,
-        description: 'Trips retrieved successfully',
+        description: 'Trips found successfully',
         type: TripListApiResponse,
     })
     @SerializeOptions({ type: TripListApiResponse, strategy: 'excludeAll' })
     async getAssignedTrips(
-        @UserToken() user: AccessTokenDTO,
-        @Query('date') date?: string,
+        @UserToken() user: DriverAccessTokenDTO,
+        @Query() query: DriverSearchPassengerTripsDto,
     ) {
-        const searchDate = date ? new Date(date) : new Date();
-        searchDate.setUTCHours(0, 0, 0, 0);
-
-        const endOfDay = new Date(searchDate);
-        endOfDay.setUTCHours(23, 59, 59, 999);
-
-        const trips = await this.db.trip.findMany({
-            where: {
-                driverId: user.sub,
-                departureTime: {
-                    gte: searchDate,
-                    lte: endOfDay,
-                },
-                status: {
-                    in: [
-                        TripStatus.SCHEDULED,
-                        TripStatus.BOARDING,
-                        TripStatus.IN_PROGRESS,
-                    ],
-                },
-            },
-            include: {
-                route: {
-                    include: {
-                        startLocation: true,
-                        endLocation: true,
-                    },
-                },
-                vehicle: true,
-            },
-            orderBy: {
-                departureTime: 'asc',
-            },
+        const trips = await this.tripService.searchTrips({
+            ...query,
+            driverId: user.sub,
         });
-
         return {
             status: 'success',
-            message: 'Trips retrieved successfully',
+            message: `Found ${trips.results.length} assigned trips`,
             data: trips,
         };
     }
 
-    @Get('trips/:tripId/boarding-status')
-    @UseGuards(DriverAssignmentGuard)
+    @Post(':tripId/open-boarding')
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Get boarding status for a trip' })
+    @ApiOperation({
+        summary: 'Open boarding for a trip (start accepting passengers)',
+    })
     @ApiResponse({
         status: 200,
-        description: 'Boarding status retrieved successfully',
-        type: BoardingStatusApiResponse,
-    })
-    @SerializeOptions({
-        type: BoardingStatusApiResponse,
-        strategy: 'excludeAll',
-    })
-    async getBoardingStatus(
-        @Param('tripId') tripId: string,
-    ): Promise<BoardingStatusApiResponse> {
-        const status = await this.boardingService.getBoardingStatus(tripId);
-
-        return {
-            status: 'success',
-            message: 'Boarding status retrieved successfully',
-            data: status,
-        };
-    }
-
-    @Patch('trips/:tripId/status')
-    @UseGuards(DriverAssignmentGuard)
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Update trip status' })
-    @ApiResponse({
-        status: 200,
-        description: 'Trip status updated successfully',
+        description: 'Boarding opened successfully',
         type: TripEntityApiResponse,
     })
     @SerializeOptions({ type: TripEntityApiResponse, strategy: 'excludeAll' })
-    async updateTripStatus(
-        @UserToken() user: AccessTokenDTO,
+    async openBoarding(
+        @UserToken() user: DriverAccessTokenDTO,
         @Param('tripId') tripId: string,
-        @Body() dto: UpdateTripStatusDto,
     ): Promise<TripEntityApiResponse> {
-        const trip = await this.tripExecutionService.updateTripStatus(
+        const trip = await this.tripExecutionService.openBoarding(
             tripId,
-            dto.status,
             user.sub,
         );
 
         return {
             status: 'success',
-            message: 'Trip status updated successfully',
+            message: 'Boarding opened successfully',
             data: trip,
         };
     }
 
-    @Post('trips/:tripId/stops/:stopId/status')
-    @UseGuards(DriverAssignmentGuard)
+    @Post(':tripId/start')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Start the trip (begin journey)' })
+    @ApiResponse({
+        status: 200,
+        description: 'Trip started successfully',
+        type: TripEntityApiResponse,
+    })
+    @SerializeOptions({ type: TripEntityApiResponse, strategy: 'excludeAll' })
+    async startTrip(
+        @UserToken() user: AccessTokenDTO,
+        @Param('tripId') tripId: string,
+    ): Promise<TripEntityApiResponse> {
+        const trip = await this.tripExecutionService.updateTripStatus(
+            tripId,
+            TripStatus.IN_PROGRESS,
+            user.sub,
+        );
+
+        return {
+            status: 'success',
+            message: 'Trip started successfully',
+            data: trip,
+        };
+    }
+
+    @Post(':tripId/complete')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Complete the trip (mark as finished)' })
+    @ApiResponse({
+        status: 200,
+        description: 'Trip completed successfully',
+        type: TripEntityApiResponse,
+    })
+    @SerializeOptions({ type: TripEntityApiResponse, strategy: 'excludeAll' })
+    async completeTrip(
+        @UserToken() user: AccessTokenDTO,
+        @Param('tripId') tripId: string,
+    ): Promise<TripEntityApiResponse> {
+        const trip = await this.tripExecutionService.updateTripStatus(
+            tripId,
+            TripStatus.COMPLETED,
+            user.sub,
+        );
+
+        return {
+            status: 'success',
+            message: 'Trip completed successfully',
+            data: trip,
+        };
+    }
+
+    @Get(':tripId/passengers')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Get passengers for a trip' })
+    @ApiResponse({
+        status: 200,
+        description: 'Passengers retrieved successfully',
+        type: PassengersListApiResponse,
+    })
+    @SerializeOptions({
+        type: PassengersListApiResponse,
+        strategy: 'excludeAll',
+    })
+    async getPassengers(
+        @UserToken() user: DriverAccessTokenDTO,
+        @Param('tripId') tripId: string,
+        @Query() query: DriverSearchPassengerTripsDto,
+    ): Promise<PaginatedResponse<PassengerTrip>> {
+        const results = await this.tripService.getPassengerTrips(tripId, {
+            ...query,
+            driverId: user.sub,
+        });
+
+        return {
+            status: 'success',
+            message: 'Boarding status retrieved successfully',
+            data: results,
+        };
+    }
+
+    @Post(':tripId/stops/:stopId/status')
     @HttpCode(HttpStatus.OK)
     @ApiOperation({ summary: 'Update stop status' })
     @ApiResponse({
@@ -212,10 +264,9 @@ export class DriverTripsController {
         };
     }
 
-    @Get('trips/:tripId')
-    @UseGuards(DriverAssignmentGuard)
+    @Get(':tripId')
     @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Get trip execution details' })
+    @ApiOperation({ summary: 'Get trip details' })
     @ApiResponse({
         status: 200,
         description: 'Trip details retrieved successfully',
@@ -225,8 +276,7 @@ export class DriverTripsController {
     async getTripDetails(
         @Param('tripId') tripId: string,
     ): Promise<TripEntityApiResponse> {
-        const trip =
-            await this.tripExecutionService.getTripExecutionDetails(tripId);
+        const trip = await this.tripService.getTripById(tripId);
 
         return {
             status: 'success',

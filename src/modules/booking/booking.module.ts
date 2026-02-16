@@ -1,33 +1,29 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule } from '@nestjs/config';
-
-// Services
-import { BookingService } from './services/booking.service';
-import { PassengerService } from './services/passenger.service';
-import { PaymentService } from './services/payment.service';
-import { TripScheduleService } from './services/trip-schedule.service';
-import { TripCreationService } from './services/trip-creation.service';
-import { TripExecutionService } from './services/trip-execution.service';
-import { BoardingService } from './services/boarding.service';
-import { RouteService } from './services/route.service';
-
-// Controllers
-import { BookingController } from './controllers/booking.controller';
-import { TripController } from './controllers/trip.controller';
-import { PaymentWebhookController } from './controllers/payment-webhook.controller';
-import { TripAdminController } from './controllers/trip.admin.controller';
-import { RouteAdminController } from './controllers/route.admin.controller';
-import { ScheduleController } from './controllers/schedule.controller';
-
-// Guards
-import { BookingOwnershipGuard } from './guards/booking-ownership.guard';
-import { DriverAssignmentGuard } from './guards/driver-assignment.guard';
-import { TripService } from './services/trip.service';
-import { UsersModule } from '../user/user.module';
+import { UsersModule } from '@/modules/user/user.module';
+import { BookingController } from '@/modules/booking/controllers/booking.controller';
+import { TripController } from '@/modules/booking/controllers/trip.user.controller';
+import { ScheduleController } from '@/modules/booking/controllers/schedule.controller';
+import { TripAdminController } from '@/modules/booking/controllers/trip.admin.controller';
+import { RouteAdminController } from '@/modules/booking/controllers/route.admin.controller';
+import { PaymentWebhookController } from '@/modules/booking/controllers/payment-webhook.controller';
+import { DriverTripsController } from '@/modules/booking/controllers/trip.driver.controller';
+import { BookingService } from '@/modules/booking/services/booking.service';
+import { PassengerService } from '@/modules/booking/services/passenger.service';
+import { PaymentService } from '@/modules/booking/services/payment.service';
+import { TripScheduleService } from '@/modules/booking/services/trip-schedule.service';
+import { TripCreationService } from '@/modules/booking/services/trip-creation.service';
+import { TripExecutionService } from '@/modules/booking/services/trip-execution.service';
+import { RouteService } from '@/modules/booking/services/route.service';
+import { TripService } from '@/modules/booking/services/trip.service';
+import { TripCronService } from '@/modules/booking/services/trip-cron.service';
+import { BookingOwnershipGuard } from '@/modules/booking/guards/booking-ownership.guard';
+import { DriverModule } from '@/modules/driver/driver.module';
+import { TripUserService } from '@/modules/booking/services/trip.user.service';
 
 @Module({
-    imports: [ConfigModule, UsersModule, JwtModule.register({})],
+    imports: [ConfigModule, UsersModule, DriverModule, JwtModule.register({})],
     controllers: [
         BookingController,
         TripController,
@@ -35,6 +31,7 @@ import { UsersModule } from '../user/user.module';
         TripAdminController,
         RouteAdminController,
         PaymentWebhookController,
+        DriverTripsController,
     ],
     providers: [
         // Services
@@ -44,12 +41,12 @@ import { UsersModule } from '../user/user.module';
         TripScheduleService,
         TripCreationService,
         TripExecutionService,
-        BoardingService,
+        TripUserService,
         RouteService,
         TripService,
+        TripCronService,
         // Guards
         BookingOwnershipGuard,
-        DriverAssignmentGuard,
     ],
     exports: [
         BookingService,
@@ -58,7 +55,6 @@ import { UsersModule } from '../user/user.module';
         TripScheduleService,
         TripCreationService,
         TripExecutionService,
-        BoardingService,
         RouteService,
     ],
 })
