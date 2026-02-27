@@ -217,14 +217,19 @@ export class BookingService {
                             }
                         }
 
-                        // TODO: factor in the return trip price
                         // Calculate total price
-                        const pricePerSeat =
+                        const pricePerSeatForOutgoingTrip =
                             outboundTrip.priceOverride ||
                             outboundTrip.route.basePrice;
+                        const pricePerSeatForReturnTrip =
+                            returnTrip?.priceOverride ||
+                            returnTrip?.route.basePrice ||
+                            0;
                         const totalPrice = returnTripId
-                            ? pricePerSeat * passengerCount * 2
-                            : pricePerSeat * passengerCount;
+                            ? (pricePerSeatForOutgoingTrip +
+                                  pricePerSeatForReturnTrip) *
+                              passengerCount
+                            : pricePerSeatForOutgoingTrip * passengerCount;
 
                         // Create booking
                         const booking = await tx.booking.create({
@@ -432,8 +437,6 @@ export class BookingService {
             },
         });
 
-        console.log("klda", transaction);
-
         const booking = transaction?.booking;
 
         if (!booking) {
@@ -477,7 +480,7 @@ export class BookingService {
         this.logger.log(`Cancelling booking ${bookingId} for user ${userId}`);
 
         // Execute all DB consistency logic inside a single transaction
-        const booking = await this.db.$transaction(async (tx) => {
+        await this.db.$transaction(async (tx) => {
             const booking = await tx.booking.findUnique({
                 where: { id: bookingId },
                 include: {
