@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { EventEmitter2 } from '@nestjs/event-emitter';
+import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { DatabaseService } from '@/modules/database/database.service';
 import {
     Prisma,
@@ -15,7 +14,7 @@ import { PaginatedResponse } from '@/types';
 import { UsersService } from '@/modules/user/users.service';
 import { PassengerService } from '@/modules/booking/services/passenger.service';
 import { TripCreationService } from '@/modules/booking/services/trip-creation.service';
-import { PaymentService } from '@/modules/booking/services/payment.service';
+import { PaymentService } from '@/modules/payment/payment.service';
 import {
     CreateBookingDto,
     CreateBookingFromScheduleDto,
@@ -42,14 +41,16 @@ import {
     TripNotBookableException,
     TripNotFoundException,
 } from '@/modules/booking/exceptions/trip.exception';
+import { format } from 'date-fns';
+import { PaymentChannel } from '@/modules/payment/types/payment';
+import { TransactionIntentsToEventMap } from '@/modules/payment/transaction-intent';
 
 @Injectable()
 export class BookingService {
     private readonly logger = new Logger(BookingService.name);
-
+    in;
     constructor(
         private readonly db: DatabaseService,
-        private readonly configService: ConfigService,
         private readonly userService: UsersService,
         private readonly passengerService: PassengerService,
         private readonly paymentService: PaymentService,
@@ -65,13 +66,7 @@ export class BookingService {
             `Creating booking for user ${userId}, trip ${dto.outboundTripId}`,
         );
 
-        return this.createBooking(userId, {
-            outboundTripId: dto.outboundTripId,
-            returnTripId: dto.returnTripId,
-            boardingStopId: dto.boardingStopId,
-            alightingStopId: dto.alightingStopId,
-            passengers: dto.passengers,
-        });
+        return this.createBooking(userId, dto);
     }
 
     /**
@@ -80,7 +75,7 @@ export class BookingService {
     async createBookingFromSchedule(
         userId: string,
         dto: CreateBookingFromScheduleDto,
-    ): Promise<{ booking: Booking; paymentUrl: string }> {
+    ) {
         this.logger.log(
             `Creating booking from schedule ${dto.tripScheduleId} for user ${userId} on ${dto.departureDate.toISOString()}`,
         );
@@ -97,6 +92,7 @@ export class BookingService {
             boardingStopId: dto.boardingStopId,
             alightingStopId: dto.alightingStopId,
             passengers: dto.passengers,
+            paymentMethod: dto.paymentMethod,
         });
     }
 
@@ -106,13 +102,14 @@ export class BookingService {
     private async createBooking(
         userId: string,
         params: CreateBookingDto,
-    ): Promise<{ booking: Booking; paymentUrl: string }> {
+    ): Promise<{ booking: Booking; payment: PaymentChannel }> {
         const {
             outboundTripId,
             returnTripId,
             boardingStopId,
             alightingStopId,
             passengers,
+            paymentMethod,
         } = params;
 
         const passengerCount = passengers.length;
@@ -130,6 +127,8 @@ export class BookingService {
                                 route: {
                                     include: {
                                         routeStops: true,
+                                        endLocation: true,
+                                        startLocation: true,
                                     },
                                 },
                             },
@@ -170,7 +169,13 @@ export class BookingService {
                         // Validate return trip if provided
                         let returnTrip: Prisma.TripGetPayload<{
                             include: {
-                                route: { include: { routeStops: true } };
+                                route: {
+                                    include: {
+                                        routeStops: true;
+                                        startLocation: true;
+                                        endLocation: true;
+                                    };
+                                };
                             };
                         }> | null = null;
 
@@ -181,6 +186,8 @@ export class BookingService {
                                     route: {
                                         include: {
                                             routeStops: true,
+                                            startLocation: true,
+                                            endLocation: true,
                                         },
                                     },
                                 },
@@ -210,6 +217,7 @@ export class BookingService {
                             }
                         }
 
+                        // TODO: factor in the return trip price
                         // Calculate total price
                         const pricePerSeat =
                             outboundTrip.priceOverride ||
@@ -217,9 +225,6 @@ export class BookingService {
                         const totalPrice = returnTripId
                             ? pricePerSeat * passengerCount * 2
                             : pricePerSeat * passengerCount;
-
-                        // Generate payment reference
-                        const paymentReference = `BK-${nanoid(16)}`;
 
                         // Create booking
                         const booking = await tx.booking.create({
@@ -234,8 +239,6 @@ export class BookingService {
                                     alightingStopId ||
                                     outboundTrip.route.endLocationId,
                                 totalPrice,
-                                status: BookingStatus.PAYMENT_PENDING,
-                                paymentReference,
                                 passengers: {
                                     create: passengers.map((p) => ({
                                         firstName: p.firstName,
@@ -331,7 +334,10 @@ export class BookingService {
                                 include: BookingWithDetailsInclude,
                             });
 
-                        return { booking: detailedBooking, passengerTrips };
+                        return {
+                            booking: detailedBooking,
+                            passengerTrips,
+                        };
                     },
                     {
                         isolationLevel:
@@ -341,18 +347,29 @@ export class BookingService {
                     },
                 );
 
-                const user = await this.userService.findUser({ id: userId });
-
-                // Initialize payment
-                const payment = await this.paymentService.initializeTransaction(
-                    user.email,
-                    result.booking.totalPrice,
-                    result.booking.paymentReference!,
+                const transaction = await this.paymentService.createTransaction(
+                    userId,
                     {
+                        amount: result.booking.totalPrice,
                         bookingId: result.booking.id,
-                        userId,
+                        description: `Payment for ${result.booking.returnTrip ? 'outbound trip' : ''} ${result.booking.outboundTrip.code} from ${result.booking.outboundTrip.route.startLocation.name} 
+                                    to ${result.booking.outboundTrip.route.endLocation.name} on ${format(result.booking.outboundTrip.departureTime, 'EEEE yyyy-MM-dd')}
+                                   ${
+                                       result.booking.returnTrip
+                                           ? `and return trip ${result.booking.returnTrip.code} from ${result.booking.returnTrip.route.startLocation.name} to 
+                                             ${result.booking.returnTrip.route.endLocation.name} on ${format(result.booking.returnTrip.departureTime, 'EEEE yyyy-MM-dd')}`
+                                           : ''
+                                   } for ${passengers.length} passenger(s)
+                                    `,
+                        type: 'CREDIT',
+                        intent: 'BOOKING_PAYMENT',
                     },
                 );
+
+                const payment = await this.paymentService.acceptPayment({
+                    source: paymentMethod,
+                    transactionId: transaction.id,
+                });
 
                 // Emit event
                 this.eventEmitter.emit(
@@ -360,8 +377,10 @@ export class BookingService {
                     new BookingCreatedEvent(
                         result.booking.id,
                         userId,
-                        outboundTripId,
-                        returnTripId || null,
+                        result.booking.outboundTrip.id,
+                        result.booking.returnTrip
+                            ? result.booking.returnTrip.id
+                            : null,
                         result.booking.passengers.map((p) => ({
                             id: p.id,
                             firstName: p.firstName,
@@ -373,7 +392,7 @@ export class BookingService {
 
                 return {
                     booking: result.booking,
-                    paymentUrl: payment.authorizationUrl,
+                    payment: payment,
                 };
             } catch (error) {
                 const prismaError =
@@ -400,27 +419,31 @@ export class BookingService {
     /**
      * Confirm payment and update booking status
      */
-    async confirmBooking(reference: string): Promise<void> {
-        this.logger.log(`Confirming payment for reference: ${reference}`);
-
-        const verification =
-            await this.paymentService.verifyTransaction(reference);
-
-        if (!verification.success) {
-            this.logger.error(`Payment verification failed for ${reference}`);
-            return;
-        }
-
-        const booking = await this.db.booking.findUnique({
-            where: { paymentReference: reference },
+    @OnEvent(TransactionIntentsToEventMap.BOOKING_PAYMENT)
+    async confirmBooking({
+        transactionId,
+    }: {
+        transactionId: string;
+    }): Promise<void> {
+        const transaction = await this.db.transaction.findUnique({
+            where: { id: transactionId },
+            include: {
+                booking: true,
+            },
         });
 
+        console.log("klda", transaction);
+
+        const booking = transaction?.booking;
+
         if (!booking) {
-            this.logger.error(`Booking not found for reference: ${reference}`);
+            this.logger.error(
+                `Booking not found for transactionId: ${transactionId}`,
+            );
             return;
         }
 
-        if (booking.status !== BookingStatus.PAYMENT_PENDING) {
+        if (booking.status === BookingStatus.CONFIRMED) {
             this.logger.warn(`Booking ${booking.id} already processed`);
             return;
         }
@@ -429,8 +452,6 @@ export class BookingService {
             where: { id: booking.id },
             data: {
                 status: BookingStatus.CONFIRMED,
-                paidAt: verification.paidAt,
-                paymentMethod: verification.channel,
             },
         });
 
@@ -439,7 +460,7 @@ export class BookingService {
             new BookingConfirmedEvent(
                 booking.id,
                 booking.userId,
-                reference,
+                transactionId,
                 booking.totalPrice,
             ),
         );
@@ -456,71 +477,66 @@ export class BookingService {
         this.logger.log(`Cancelling booking ${bookingId} for user ${userId}`);
 
         // Execute all DB consistency logic inside a single transaction
-        const { shouldRefund, paymentReference } = await this.db.$transaction(
-            async (tx) => {
-                const booking = await tx.booking.findUnique({
-                    where: { id: bookingId },
-                    include: {
-                        outboundTrip: true,
-                        returnTrip: true,
-                    },
-                });
+        const booking = await this.db.$transaction(async (tx) => {
+            const booking = await tx.booking.findUnique({
+                where: { id: bookingId },
+                include: {
+                    outboundTrip: true,
+                    returnTrip: true,
+                },
+            });
 
-                if (!booking) {
-                    throw new BookingNotFoundException(bookingId);
-                }
+            if (!booking) {
+                throw new BookingNotFoundException(bookingId);
+            }
 
-                if (booking.status === BookingStatus.CANCELLED) {
-                    throw new BookingAlreadyCancelledException(bookingId);
-                }
+            if (booking.status === BookingStatus.CANCELLED) {
+                throw new BookingAlreadyCancelledException(bookingId);
+            }
 
-                if (
-                    booking.outboundTrip.status !== TripStatus.SCHEDULED ||
-                    (booking.returnTrip &&
-                        booking.returnTrip.status !== TripStatus.SCHEDULED)
-                ) {
-                    throw new BookingCancellationNotAllowedException(
-                        'Trip has already started or is in progress',
-                    );
-                }
+            if (
+                booking.outboundTrip.status !== TripStatus.SCHEDULED ||
+                (booking.returnTrip &&
+                    booking.returnTrip.status !== TripStatus.SCHEDULED)
+            ) {
+                throw new BookingCancellationNotAllowedException(
+                    'Trip has already started or is in progress',
+                );
+            }
 
-                const passengerCount = await tx.passenger.count({
-                    where: { bookingId },
-                });
+            const passengerCount = await tx.passenger.count({
+                where: { bookingId },
+            });
 
-                // Update booking status
-                await tx.booking.update({
-                    where: { id: bookingId },
-                    data: { status: BookingStatus.CANCELLED },
-                });
+            // Update booking status
+            await tx.booking.update({
+                where: { id: bookingId },
+                data: { status: BookingStatus.CANCELLED },
+            });
 
-                // Restore seats
+            // Restore seats
+            await tx.trip.update({
+                where: { id: booking.outboundTripId },
+                data: {
+                    availableSeats: { increment: passengerCount },
+                },
+            });
+
+            if (booking.returnTripId) {
                 await tx.trip.update({
-                    where: { id: booking.outboundTripId },
+                    where: { id: booking.returnTripId },
                     data: {
                         availableSeats: { increment: passengerCount },
                     },
                 });
+            }
 
-                if (booking.returnTripId) {
-                    await tx.trip.update({
-                        where: { id: booking.returnTripId },
-                        data: {
-                            availableSeats: { increment: passengerCount },
-                        },
-                    });
-                }
+            return booking;
+        });
 
-                return {
-                    shouldRefund: booking.status === BookingStatus.CONFIRMED,
-                    paymentReference: booking.paymentReference,
-                };
-            },
-        );
-
-        if (shouldRefund && paymentReference) {
-            await this.paymentService.processRefund(paymentReference);
-        }
+        // if (shouldRefund && paymentReference) {
+        //     await this.paymentService.processRefund(paymentReference);
+        // }
 
         this.eventEmitter.emit(
             'booking.cancelled',

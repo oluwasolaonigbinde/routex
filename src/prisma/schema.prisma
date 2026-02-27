@@ -39,6 +39,8 @@ model User {
     pinLockedUntil           DateTime?        @map("pin_locked_until")
     backupCodes              BackupCode[]
     bookings                 Booking[]
+    wallet                   Wallet?
+    transactions             Transaction[]
 }
 
 model Admin {
@@ -67,6 +69,7 @@ model Admin {
     blockedAt                DateTime?        @map("blocked_at")
     lockExpiresAt            DateTime?        @map("lock_expires_at")
     backupCodes              BackupCode[]
+    transactions             Transaction[]
 }
 
 model BackupCode {
@@ -268,27 +271,25 @@ model TripStopStatus {
 }
 
 model Booking {
-    id               String    @id @default(uuid())
-    userId           String
-    outboundTripId   String
-    returnTripId     String?
-    totalPrice       Int
-    boardingStopId   String
-    alightingStopId  String
-    paymentReference String?   @unique
-    paymentMethod    String?
-    paidAt           DateTime?
-
+    id              String    @id @default(uuid())
+    userId          String
+    outboundTripId  String
+    returnTripId    String?
+    totalPrice      Int
+    boardingStopId  String
+    alightingStopId String
+    paidAt          DateTime?
+    refundedAt      DateTime?
     status    BookingStatus @default(PENDING)
     createdAt DateTime      @default(now())
-
     user          User     @relation(fields: [userId], references: [id])
     boardingStop  Location @relation("BoardingStop", fields: [boardingStopId], references: [id])
     alightingStop Location @relation("AlightingStop", fields: [alightingStopId], references: [id])
 
-    outboundTrip Trip        @relation("OutboundTrip", fields: [outboundTripId], references: [id])
-    returnTrip   Trip?       @relation("ReturnTrip", fields: [returnTripId], references: [id])
+    outboundTrip Trip          @relation("OutboundTrip", fields: [outboundTripId], references: [id])
+    returnTrip   Trip?         @relation("ReturnTrip", fields: [returnTripId], references: [id])
     passengers   Passenger[]
+    transactions Transaction[]
 }
 
 model TripSchedule {
@@ -369,12 +370,109 @@ model Driver {
     trips                    Trip[]
 }
 
+// Wallet
+
+model Wallet {
+    id        String   @id @default(uuid())
+    userId    String   @unique
+    balance   Int      @default(0)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    user User @relation(fields: [userId], references: [id])
+}
+
+model Transaction {
+    id          String             @id @default(uuid())
+    type        TransactionType
+    amount      Int // net amount settled to the user
+    gross       Int?
+    gatewayFee  Int?
+    gateway     String?
+    reference   String             @unique
+    bookingId   String?
+    balance     Int? // balance after this transaction
+    intent      TransactionIntent
+    source      TransactionSource?
+    description String
+    metadata    Json?
+    failedAt    DateTime?          @map("failed_at")
+    succeededAt DateTime?          @map("succeeded_at")
+
+    status       TransactionStatus @default(PENDING)
+    createdAt    DateTime          @default(now())
+    approvedById String?
+
+    userId String
+    user   User   @relation(fields: [userId], references: [id])
+
+    approvedBy Admin? @relation(fields: [approvedById], references: [id])
+
+    paymentAttempts PaymentAttempt[]
+    booking         Booking?         @relation(fields: [bookingId], references: [id])
+
+    @@index([reference])
+}
+
+model PaymentAttempt {
+    id String @id @default(uuid())
+
+    transactionId String
+    gateway       String
+    status        PaymentAttemptStatus @default(PENDING)
+
+    requestPayload  Json? @map("request_payload")
+    responsePayload Json? @map("response_payload")
+
+    errorCode    String? @map("error_code")
+    errorMessage String? @map("error_message")
+
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+
+    transaction Transaction @relation(fields: [transactionId], references: [id])
+}
+
+enum PaymentAttemptStatus {
+    PENDING
+    SUCCESS
+    FAILED
+}
+
+enum TransactionIntent {
+    WALLET_TOPUP
+    BOOKING_PAYMENT
+}
+
 enum BookingStatus {
     PENDING
-    PAYMENT_PENDING
     CONFIRMED
     CANCELLED
     REFUNDED
+}
+
+enum PaymentSource {
+    PAYSTACK
+    WALLET
+}
+
+enum TransactionType {
+    CREDIT
+    DEBIT
+}
+
+enum TransactionSource {
+    INSTANT_TRANSFER
+    WALLET
+    CARD
+}
+
+enum TransactionStatus {
+    PENDING
+    SUCCESS
+    FAILED
+
+    @@map("WalletTransactionStatus")
 }
 
 enum AuthorizationAttemptStatus {

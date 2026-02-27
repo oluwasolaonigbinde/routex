@@ -17,7 +17,7 @@ export class BookingConfirmedEvent {
     constructor(
         public readonly bookingId: string,
         public readonly userId: string,
-        public readonly paymentReference: string,
+        public readonly transactionId: string,
         public readonly totalPrice: number,
     ) {}
 }

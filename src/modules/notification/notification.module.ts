@@ -8,6 +8,7 @@ import { VerificationTokenModule } from '../verification-token/verification-toke
 import { DatabaseModule } from '../database/database.module';
 import { UserNotificationListener } from './listeners/user-notification.listener';
 import { BookingNotificationListener } from './listeners/booking-notification.listener';
+import { WalletNotificationListener } from './listeners/wallet-notification.listener';
 // import { NotificationAdminController } from './controllers/notification.admin.controller';
 import { NotificationUserController } from './controllers/notification.user.controller';
 
@@ -24,6 +25,7 @@ export class NotificationModule {
                 // AdminNotificationListener,
                 UserNotificationListener,
                 BookingNotificationListener,
+                WalletNotificationListener,
                 // {
                 //     provide: ResendEmailStrategy,
                 //     useFactory: (configService: ConfigService) => {

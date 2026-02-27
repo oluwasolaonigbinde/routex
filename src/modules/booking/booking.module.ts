@@ -7,11 +7,10 @@ import { TripController } from '@/modules/booking/controllers/trip.user.controll
 import { ScheduleController } from '@/modules/booking/controllers/schedule.controller';
 import { TripAdminController } from '@/modules/booking/controllers/trip.admin.controller';
 import { RouteAdminController } from '@/modules/booking/controllers/route.admin.controller';
-import { PaymentWebhookController } from '@/modules/booking/controllers/payment-webhook.controller';
+import { PaymentWebhookController } from '@/modules/payment/payment-webhook.controller';
 import { DriverTripsController } from '@/modules/booking/controllers/trip.driver.controller';
 import { BookingService } from '@/modules/booking/services/booking.service';
 import { PassengerService } from '@/modules/booking/services/passenger.service';
-import { PaymentService } from '@/modules/booking/services/payment.service';
 import { TripScheduleService } from '@/modules/booking/services/trip-schedule.service';
 import { TripCreationService } from '@/modules/booking/services/trip-creation.service';
 import { TripExecutionService } from '@/modules/booking/services/trip-execution.service';
@@ -21,9 +20,11 @@ import { TripCronService } from '@/modules/booking/services/trip-cron.service';
 import { BookingOwnershipGuard } from '@/modules/booking/guards/booking-ownership.guard';
 import { DriverModule } from '@/modules/driver/driver.module';
 import { TripUserService } from '@/modules/booking/services/trip.user.service';
+import { WalletModule } from '@/modules/wallet/wallet.module';
+import { PaymentModule } from '@/modules/payment/payment.module';
 
 @Module({
-    imports: [ConfigModule, UsersModule, DriverModule, JwtModule.register({})],
+    imports: [UsersModule, DriverModule, WalletModule, PaymentModule],
     controllers: [
         BookingController,
         TripController,
@@ -37,7 +38,6 @@ import { TripUserService } from '@/modules/booking/services/trip.user.service';
         // Services
         BookingService,
         PassengerService,
-        PaymentService,
         TripScheduleService,
         TripCreationService,
         TripExecutionService,
@@ -51,7 +51,6 @@ import { TripUserService } from '@/modules/booking/services/trip.user.service';
     exports: [
         BookingService,
         PassengerService,
-        PaymentService,
         TripScheduleService,
         TripCreationService,
         TripExecutionService,

@@ -52,15 +52,18 @@ export class BookingController {
         @UserToken() user: AccessTokenDTO,
         @Body() dto: CreateBookingDto,
     ): Promise<CreateBookingApiResponse> {
-        const { booking, paymentUrl } =
+        const { booking, payment } =
             await this.bookingService.createBookingFromTrip(user.sub, dto);
 
         return {
-            status: 'success',
-            message: 'Booking created successfully. Please complete payment.',
+            status: payment.status,
+            message:
+                payment.status === 'success'
+                    ? 'Booking confirmed'
+                    : 'Booking created successfully. Please complete payment.',
             data: {
                 booking,
-                paymentUrl,
+                payment,
             },
         };
     }
@@ -82,16 +85,18 @@ export class BookingController {
         @UserToken() user: AccessTokenDTO,
         @Body() dto: CreateBookingFromScheduleDto,
     ): Promise<CreateBookingApiResponse> {
-        const { booking, paymentUrl } =
+        const { booking, payment } =
             await this.bookingService.createBookingFromSchedule(user.sub, dto);
 
         return {
-            status: 'success',
+            status: payment.status,
             message:
-                'Booking created from schedule successfully. Please complete payment.',
+                payment.status === 'success'
+                    ? 'Booking confirmed'
+                    : 'Booking created from schedule successfully. Please complete payment.',
             data: {
                 booking,
-                paymentUrl,
+                payment,
             },
         };
     }

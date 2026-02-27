@@ -87,7 +87,6 @@ export class TripCronService {
                     id: true,
                     userId: true,
                     status: true,
-                    paymentReference: true,
                     _count: { select: { passengers: true } },
                 },
             });

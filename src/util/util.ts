@@ -45,3 +45,7 @@ export function decrypt(payload: string, key: string): string {
         decipher.final(),
     ]).toString('utf8');
 }
+
+export function convertTo2DecimalPlaces(amount: number): number {
+    return Math.round(amount * 100) / 100;
+}

@@ -1,9 +1,10 @@
 import { ApiProperty, PickType } from '@nestjs/swagger';
+import type { PaymentChannel } from '@/modules/payment/types/payment';
 import { Booking as PrismaBooking, BookingStatus } from '@prisma/client';
 import { ExposeAll } from '@/util/decorator';
 import { Type } from 'class-transformer';
 import type { ApiResponse, PaginatedResponse } from '@/types';
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsString, IsUUID } from 'class-validator';
 import {
     PassengerTripEntity,
     UserBookingPassengerEntity,
@@ -37,17 +38,11 @@ export class Booking implements PrismaBooking {
     @IsString()
     alightingStopId: string;
 
-    @ApiProperty({ type: String, nullable: true })
-    @IsOptional()
-    @IsString()
-    paymentReference: string | null;
-
-    @ApiProperty({ type: String, nullable: true })
-    @IsString()
-    paymentMethod: string | null;
-
     @ApiProperty({ type: Date, nullable: true })
     paidAt: Date | null;
+
+    @ApiProperty({ type: Date, nullable: true })
+    refundedAt: Date | null;
 
     @ApiProperty({ enum: BookingStatus })
     status: BookingStatus;
@@ -65,8 +60,6 @@ export class BookingEntity extends PickType(Booking, [
     'totalPrice',
     'boardingStopId',
     'alightingStopId',
-    'paymentReference',
-    'paymentMethod',
     'paidAt',
     'status',
     'createdAt',
@@ -108,8 +101,52 @@ class CreateBookingData {
     @Type(() => BookingEntity)
     booking: BookingEntity;
 
-    @ApiProperty({ type: String })
-    paymentUrl: string;
+    @ApiProperty({
+        description:
+            'Payment channel details (card, wallet, or instant transfer)',
+        discriminator: {
+            propertyName: 'channel',
+        },
+        anyOf: [
+            {
+                type: 'object',
+                properties: {
+                    status: {
+                        type: 'string',
+                        enum: ['processing', 'pending', 'success', 'failed'],
+                    },
+                    channel: { type: 'string', enum: ['card'] },
+                },
+            },
+            {
+                type: 'object',
+                properties: {
+                    channel: { type: 'string', enum: ['wallet'] },
+                    status: {
+                        type: 'string',
+                        enum: ['processing', 'pending', 'success', 'failed'],
+                    },
+                },
+            },
+            {
+                type: 'object',
+                properties: {
+                    checkoutUrl: { type: 'string' },
+                    expiresIn: { type: 'string' },
+                    amount: { type: 'number' },
+                    fee: { type: 'number' },
+                    net: { type: 'number' },
+                    reference: { type: 'string' },
+                    channel: { type: 'string', enum: ['instant_transfer'] },
+                    status: {
+                        type: 'string',
+                        enum: ['processing', 'pending', 'success', 'failed'],
+                    },
+                },
+            },
+        ],
+    })
+    payment: PaymentChannel;
 }
 
 @ExposeAll()

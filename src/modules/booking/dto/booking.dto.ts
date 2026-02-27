@@ -11,7 +11,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
-import { BookingStatus, TripStatus } from '@prisma/client';
+import { BookingStatus, TransactionSource, TripStatus } from '@prisma/client';
 import { PaginatedQuery } from '@/util/dto';
 import { CreatePassengerDto } from '@/modules/booking/dto/passenger.dto';
 
@@ -28,6 +28,13 @@ export class CreateBookingDto {
     @IsUUID()
     @IsOptional()
     returnTripId?: string;
+
+    @ApiProperty({
+        enum: TransactionSource,
+        description: 'Payment method to use for the booking',
+    })
+    @IsEnum(TransactionSource)
+    paymentMethod: TransactionSource;
 
     @ApiProperty({
         example: 'uuid',
@@ -123,6 +130,13 @@ export class CreateBookingFromScheduleDto {
     @IsUUID()
     @IsOptional()
     alightingStopId?: string;
+
+    @ApiProperty({
+        enum: TransactionSource,
+        description: 'Payment method to use for the booking',
+    })
+    @IsEnum(TransactionSource)
+    paymentMethod: TransactionSource;
 
     @ApiProperty({
         type: [CreatePassengerDto],

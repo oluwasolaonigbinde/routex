@@ -9,6 +9,7 @@ import { UsersModule } from '@/modules/user/user.module';
 import { BookingModule } from '@/modules/booking/booking.module';
 import { DriverModule } from '@/modules/driver/driver.module';
 import { AdminModule } from '@/modules/admin/admin.module';
+import { WalletModule } from '@/modules/wallet/wallet.module';
 import { validate } from '@/validators/env.validation';
 import { NotificationModule } from '@/modules/notification/notification.module';
 import { StorageModule } from '@/storage/storage.module';
@@ -29,7 +30,7 @@ import { AppController } from '@/app.controller';
         BookingModule,
         DriverModule,
         AdminModule,
-        // AdminModule,
+        WalletModule,
         NotificationModule.forRoot(),
         StorageModule,
     ],

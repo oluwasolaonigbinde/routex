@@ -2,6 +2,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import { format } from 'node_modules/date-fns/format';
 
 const adapter = new PrismaPg({
     connectionString: process.env.DATABASE_URL as string,
@@ -40,20 +41,20 @@ function stableId(seed: string): string {
     return [part1, part2, part3, part4, part5].join('-');
 }
 
-function stablePaymentRef(seed: string): string {
-    const hash = crypto
-        .createHash('sha256')
-        .update(`routex-pay:${seed}`)
-        .digest('hex');
-    return `PAY-${hash.slice(0, 8).toUpperCase()}`;
-}
-
 function stablePassengerCode(seed: string): string {
     const hash = crypto
         .createHash('sha256')
         .update(`routex-psg:${seed}`)
         .digest('hex');
     return `PSG-${hash.slice(0, 6).toUpperCase()}`;
+}
+
+function stableRef(seed: string): string {
+    const hash = crypto
+        .createHash('sha256')
+        .update(`routex-ref:${seed}`)
+        .digest('hex');
+    return `TX-${hash.slice(0, 12).toUpperCase()}`;
 }
 
 function generateBoardingToken(
@@ -801,15 +802,8 @@ async function main() {
         totalPrice: number;
         boardingStopId?: string;
         alightingStopId?: string;
-        paymentRef: string;
-        paymentMethod?: string;
         paidAt?: Date;
-        status:
-            | 'PENDING'
-            | 'PAYMENT_PENDING'
-            | 'CONFIRMED'
-            | 'CANCELLED'
-            | 'REFUNDED';
+        status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'REFUNDED';
         passengers: Array<{
             id: string;
             firstName: string;
@@ -830,8 +824,29 @@ async function main() {
         // Fetch the outbound trip with route to get fallback values
         const outboundTrip = await prisma.trip.findUnique({
             where: { id: def.outboundTripId },
-            include: { route: true },
+            include: {
+                route: {
+                    include: {
+                        startLocation: true,
+                        endLocation: true,
+                    },
+                },
+            },
         });
+
+        const returnTrip = def.returnTripId
+            ? await prisma.trip.findUnique({
+                  where: { id: def.returnTripId },
+                  include: {
+                      route: {
+                          include: {
+                              startLocation: true,
+                              endLocation: true,
+                          },
+                      },
+                  },
+              })
+            : null;
 
         if (!outboundTrip) {
             throw new Error(`Trip ${def.outboundTripId} not found`);
@@ -843,8 +858,29 @@ async function main() {
         const actualAlightingStopId =
             def.alightingStopId ?? outboundTrip.route.endLocationId;
 
+        // const transaction = await this.paymentService.createTransaction(
+        //     user.id,
+        //     {
+        //         amount: result.booking.totalPrice,
+        //         bookingId: result.booking.id,
+        //         description: `Payment for ${result.booking.returnTrip ? 'outbound trip' : ''} ${result.booking.outboundTrip.code} from ${result.booking.outboundTrip.route.startLocation.name}
+        //                             to ${result.booking.outboundTrip.route.endLocation.name} on ${format(result.booking.outboundTrip.departureTime, 'EEEE yyyy-MM-dd')}
+        //                            ${
+        //                                result.booking.returnTrip
+        //                                    ? `and return trip ${result.booking.returnTrip.code} from ${result.booking.returnTrip.route.startLocation.name} to
+        //                                      ${result.booking.returnTrip.route.endLocation.name} on ${format(result.booking.returnTrip.departureTime, 'EEEE yyyy-MM-dd')}`
+        //                                    : ''
+        //                            } for ${result.booking.passengers.length} passenger(s)
+        //                             `,
+        //         type: 'CREDIT',
+        //         intent: 'BOOKING_PAYMENT',
+        //     },
+        // );
+
+        const reference = stableRef(`tx-${def.id}`);
+
         const booking = await prisma.booking.upsert({
-            where: { paymentReference: def.paymentRef },
+            where: { id: def.id },
             update: {},
             create: {
                 id: def.id,
@@ -854,10 +890,22 @@ async function main() {
                 totalPrice: def.totalPrice,
                 boardingStopId: actualBoardingStopId,
                 alightingStopId: actualAlightingStopId,
-                paymentReference: def.paymentRef,
-                paymentMethod: def.paymentMethod,
                 paidAt: def.paidAt,
                 status: def.status,
+            },
+        });
+
+        const tx = await prisma.transaction.upsert({
+            where: { reference },
+            update: {},
+            create: {
+                userId: def.userId,
+                amount: def.totalPrice,
+                description: `Payment for ${def.returnTripId ? 'outbound trip ' : ''}${outboundTrip.code} from ${outboundTrip.route.startLocation.name} to ${outboundTrip.route.endLocation.name} on ${format(outboundTrip.departureTime, 'EEEE yyyy-MM-dd')}${returnTrip ? ` and return trip ${returnTrip.code} from ${returnTrip.route.startLocation.name} to ${returnTrip.route.endLocation.name} on ${format(returnTrip.departureTime, 'EEEE yyyy-MM-dd')}` : ''} for ${def.passengers.length} passenger(s)`,
+                type: 'CREDIT',
+                intent: 'BOOKING_PAYMENT',
+                reference,
+                bookingId: booking.id,
             },
         });
 
@@ -921,8 +969,6 @@ async function main() {
         totalPrice: 36000,
         boardingStopId: IDS.jibowu,
         alightingStopId: IDS.utako,
-        paymentRef: stablePaymentRef('booking1'),
-        paymentMethod: 'paystack',
         paidAt: new Date(),
         status: 'CONFIRMED',
         passengers: [
@@ -969,8 +1015,6 @@ async function main() {
         totalPrice: 7500,
         boardingStopId: IDS.jibowu,
         alightingStopId: IDS.akure,
-        paymentRef: stablePaymentRef('booking2'),
-        paymentMethod: 'paystack',
         paidAt: new Date(),
         status: 'CONFIRMED',
         passengers: [
@@ -1002,8 +1046,7 @@ async function main() {
         totalPrice: 54000,
         boardingStopId: IDS.berger,
         alightingStopId: IDS.utako,
-        paymentRef: stablePaymentRef('booking3'),
-        status: 'PAYMENT_PENDING',
+        status: 'PENDING',
         passengers: [
             {
                 id: IDS.psg3a,
@@ -1060,8 +1103,6 @@ async function main() {
         totalPrice: 7500,
         boardingStopId: IDS.jibowu,
         alightingStopId: IDS.akure,
-        paymentRef: stablePaymentRef('booking4'),
-        paymentMethod: 'paystack',
         paidAt: new Date(yesterday.getTime() - 86400000),
         status: 'CONFIRMED',
         passengers: [
@@ -1092,8 +1133,6 @@ async function main() {
         userId: user2.id,
         outboundTripId: IDS.trip4,
         totalPrice: 18000,
-        paymentRef: stablePaymentRef('booking5'),
-        paymentMethod: 'paystack',
         paidAt: new Date(),
         status: 'CANCELLED',
         passengers: [

@@ -24,7 +24,7 @@ async function bootstrap() {
     );
     // app.useGlobalInterceptors(new LoggingInterceptor());
     app.useGlobalFilters(
-        new PrismaExceptionFilter(),
+        // new PrismaExceptionFilter(),
         new ActionRequiredFilter(),
     );
 

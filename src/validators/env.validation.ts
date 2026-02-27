@@ -60,11 +60,8 @@ export class EnvironmentVariables {
     @IsIn(['resend', 'smtp'])
     EMAIL_PROVIDER?: 'resend' | 'smtp';
 
-    @IsOptional()
+    @IsString()
     PAYSTACK_SECRET_KEY: string;
-
-    @IsOptional()
-    PAYSTACK_CALLBACK_URL: string;
 
     @IsString()
     JWT_SECRET: string;
