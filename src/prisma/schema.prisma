@@ -173,8 +173,8 @@ model Notification {
 model Location {
     id        String @id @default(uuid())
     name      String
-    latitude  Float?
-    longitude Float?
+    latitude  Float
+    longitude Float
 
     startRoutes             Route[]          @relation("RouteStart")
     endRoutes               Route[]          @relation("RouteEnd")

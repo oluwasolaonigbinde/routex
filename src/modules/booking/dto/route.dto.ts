@@ -18,17 +18,15 @@ export class CreateLocationDto {
     @IsString()
     name: string;
 
-    @ApiProperty({ example: 6.5964, required: false })
+    @ApiProperty({ example: 6.5964 })
     @IsNumber()
     @IsLatitude()
-    @IsOptional()
-    latitude?: number;
+    latitude: number;
 
-    @ApiProperty({ example: 3.3515, required: false })
+    @ApiProperty({ example: 3.3515 })
     @IsNumber()
     @IsLongitude()
-    @IsOptional()
-    longitude?: number;
+    longitude: number;
 }
 
 export class UpdateLocationDto extends PartialType(CreateLocationDto) {}
