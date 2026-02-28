@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
@@ -800,6 +801,7 @@ async function main() {
         outboundTripId: string;
         returnTripId?: string;
         totalPrice: number;
+        pricePerSeat: number;
         boardingStopId?: string;
         alightingStopId?: string;
         paidAt?: Date;
@@ -892,10 +894,11 @@ async function main() {
                 alightingStopId: actualAlightingStopId,
                 paidAt: def.paidAt,
                 status: def.status,
+                pricePerSeat: def.pricePerSeat,
             },
         });
 
-        const tx = await prisma.transaction.upsert({
+        await prisma.transaction.upsert({
             where: { reference },
             update: {},
             create: {
@@ -967,6 +970,7 @@ async function main() {
         userId: user1.id,
         outboundTripId: IDS.trip1,
         totalPrice: 36000,
+        pricePerSeat: 18000,
         boardingStopId: IDS.jibowu,
         alightingStopId: IDS.utako,
         paidAt: new Date(),
@@ -1013,6 +1017,7 @@ async function main() {
         userId: user2.id,
         outboundTripId: IDS.trip2,
         totalPrice: 7500,
+        pricePerSeat: 7500,
         boardingStopId: IDS.jibowu,
         alightingStopId: IDS.akure,
         paidAt: new Date(),
@@ -1044,6 +1049,7 @@ async function main() {
         userId: user3.id,
         outboundTripId: IDS.trip1,
         totalPrice: 54000,
+        pricePerSeat: 18000,
         boardingStopId: IDS.berger,
         alightingStopId: IDS.utako,
         status: 'PENDING',
@@ -1101,6 +1107,7 @@ async function main() {
         userId: user1.id,
         outboundTripId: IDS.trip5,
         totalPrice: 7500,
+        pricePerSeat: 7500,
         boardingStopId: IDS.jibowu,
         alightingStopId: IDS.akure,
         paidAt: new Date(yesterday.getTime() - 86400000),
@@ -1135,6 +1142,7 @@ async function main() {
         totalPrice: 18000,
         paidAt: new Date(),
         status: 'CANCELLED',
+        pricePerSeat: 18000,
         passengers: [
             {
                 id: IDS.psg5,

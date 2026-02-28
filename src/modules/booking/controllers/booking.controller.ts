@@ -18,7 +18,6 @@ import { PaginatedResponse } from '@/types';
 import { Booking } from '@prisma/client';
 import { BookingService } from '@/modules/booking/services/booking.service';
 import {
-    BoardingPassListResponse,
     BookingEntityApiResponse,
     BookingListApiResponse,
     CreateBookingApiResponse,
@@ -169,30 +168,6 @@ export class BookingController {
         return {
             status: 'success',
             message: 'Booking cancelled successfully',
-        };
-    }
-
-    @Get(':id/boarding-passes')
-    @HttpCode(HttpStatus.OK)
-    @ApiOperation({ summary: 'Get boarding passes for a booking' })
-    @ApiResponse({
-        status: 200,
-        description: 'Boarding passes retrieved successfully',
-        type: BoardingPassListResponse,
-    })
-    @SerializeOptions({
-        type: BoardingPassListResponse,
-        strategy: 'excludeAll',
-    })
-    async getBoardingPasses(
-        @Param('id') id: string,
-    ): Promise<BoardingPassListResponse> {
-        const passes = await this.bookingService.getBoardingPasses(id);
-
-        return {
-            status: 'success',
-            message: 'Boarding passes retrieved successfully',
-            data: passes,
         };
     }
 }

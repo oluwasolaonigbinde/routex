@@ -4,9 +4,10 @@ import { ApiProperty, PickType } from '@nestjs/swagger';
 import {
     PassengerTrip as PrismaPassengerTrip,
     Passenger as PrismaPassenger,
+    $Enums,
 } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsUUID } from 'class-validator';
+import { IsEnum, IsUUID } from 'class-validator';
 
 export class Passenger implements PrismaPassenger {
     @ApiProperty({ type: String })
@@ -41,8 +42,8 @@ export class PassengerTrip implements PrismaPassengerTrip {
     @ApiProperty({ type: String })
     tripId: string;
 
-    @ApiProperty({ type: String })
-    boardingToken: string;
+    @ApiProperty({ type: String, nullable: true })
+    boardingToken: string | null;
 
     @ApiProperty({ type: Number, nullable: true })
     seatNo: number | null;
@@ -50,6 +51,10 @@ export class PassengerTrip implements PrismaPassengerTrip {
     @ApiProperty({ type: String })
     @IsUUID()
     alightingStopId: string;
+
+    @ApiProperty({ enum: $Enums.PassengerTripStatus })
+    @IsEnum($Enums.PassengerTripStatus)
+    status: $Enums.PassengerTripStatus;
 
     @ApiProperty({ type: String })
     @IsUUID()

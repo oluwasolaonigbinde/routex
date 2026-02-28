@@ -1,15 +1,20 @@
 import { ApiProperty, PickType } from '@nestjs/swagger';
-import type { PaymentChannel } from '@/modules/payment/types/payment';
 import { Booking as PrismaBooking, BookingStatus } from '@prisma/client';
 import { ExposeAll } from '@/util/decorator';
 import { Type } from 'class-transformer';
 import type { ApiResponse, PaginatedResponse } from '@/types';
-import { IsNumber, IsString, IsUUID } from 'class-validator';
+import { IsNumber, IsString } from 'class-validator';
 import {
     PassengerTripEntity,
     UserBookingPassengerEntity,
 } from '@/modules/booking/entities/passenger.entity';
 import { TripEntity } from '@/modules/booking/entities/trip.entity';
+import {
+    CardChannelEntity,
+    InstantTransferChannelEntity,
+    PaymentChannelEntity,
+    WalletChannelEntity,
+} from '@/modules/wallet/entities/wallet.entity';
 
 // ========== Base Entities ==========
 
@@ -33,6 +38,10 @@ export class Booking implements PrismaBooking {
     @ApiProperty({ type: String })
     @IsString()
     boardingStopId: string;
+
+    @ApiProperty({ type: Number })
+    @IsNumber()
+    pricePerSeat: number;
 
     @ApiProperty({ type: String })
     @IsString()
@@ -58,6 +67,7 @@ export class BookingEntity extends PickType(Booking, [
     'outboundTripId',
     'returnTripId',
     'totalPrice',
+    'pricePerSeat',
     'boardingStopId',
     'alightingStopId',
     'paidAt',
@@ -146,7 +156,23 @@ class CreateBookingData {
             },
         ],
     })
-    payment: PaymentChannel;
+    @Type(() => PaymentChannelEntity, {
+        discriminator: {
+            property: 'channel',
+            subTypes: [
+                {
+                    value: InstantTransferChannelEntity,
+                    name: 'instant_transfer',
+                },
+                { value: CardChannelEntity, name: 'card' },
+                { value: WalletChannelEntity, name: 'wallet' },
+            ],
+        },
+    })
+    payment:
+        | InstantTransferChannelEntity
+        | CardChannelEntity
+        | WalletChannelEntity;
 }
 
 @ExposeAll()

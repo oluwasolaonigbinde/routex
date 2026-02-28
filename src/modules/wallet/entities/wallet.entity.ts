@@ -1,14 +1,13 @@
 import { ApiProperty, PickType } from '@nestjs/swagger';
 import { Wallet as PrismaWallet } from '@prisma/client';
 import { ExposeAll } from '@/util/decorator';
-import { Expose, Type } from 'class-transformer';
+import { Type } from 'class-transformer';
 import type { ApiResponse } from '@/types';
 import {
     CardChannel,
     InstantTransferChannel,
     WalletChannel,
 } from '@/modules/payment/types/payment';
-import type { PaymentChannel } from '@/modules/payment/types/payment';
 
 // ========== Base Entities ==========
 
@@ -77,6 +76,15 @@ export class InstantTransferChannelEntity extends PickType(
         'reference',
     ] as const,
 ) {}
+
+@ExposeAll()
+export class PaymentChannelEntity {
+    @ApiProperty({
+        type: String,
+        enum: ['card', 'wallet', 'instant_transfer'],
+    })
+    channel: 'card' | 'wallet' | 'instant_transfer';
+}
 
 @ExposeAll()
 export class FundWalletApiResponse implements ApiResponse<InstantTransferChannelEntity> {

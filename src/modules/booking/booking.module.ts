@@ -1,6 +1,4 @@
 import { Module } from '@nestjs/common';
-import { JwtModule } from '@nestjs/jwt';
-import { ConfigModule } from '@nestjs/config';
 import { UsersModule } from '@/modules/user/user.module';
 import { BookingController } from '@/modules/booking/controllers/booking.controller';
 import { TripController } from '@/modules/booking/controllers/trip.user.controller';
@@ -22,6 +20,7 @@ import { DriverModule } from '@/modules/driver/driver.module';
 import { TripUserService } from '@/modules/booking/services/trip.user.service';
 import { WalletModule } from '@/modules/wallet/wallet.module';
 import { PaymentModule } from '@/modules/payment/payment.module';
+import { TripDriverService } from '@/modules/booking/services/trip.driver.service';
 
 @Module({
     imports: [UsersModule, DriverModule, WalletModule, PaymentModule],
@@ -40,6 +39,7 @@ import { PaymentModule } from '@/modules/payment/payment.module';
         PassengerService,
         TripScheduleService,
         TripCreationService,
+        TripDriverService,
         TripExecutionService,
         TripUserService,
         RouteService,

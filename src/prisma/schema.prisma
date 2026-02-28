@@ -271,20 +271,21 @@ model TripStopStatus {
 }
 
 model Booking {
-    id              String    @id @default(uuid())
+    id              String        @id @default(uuid())
     userId          String
     outboundTripId  String
     returnTripId    String?
     totalPrice      Int
+    pricePerSeat    Int
     boardingStopId  String
     alightingStopId String
     paidAt          DateTime?
     refundedAt      DateTime?
-    status    BookingStatus @default(PENDING)
-    createdAt DateTime      @default(now())
-    user          User     @relation(fields: [userId], references: [id])
-    boardingStop  Location @relation("BoardingStop", fields: [boardingStopId], references: [id])
-    alightingStop Location @relation("AlightingStop", fields: [alightingStopId], references: [id])
+    status          BookingStatus @default(PENDING)
+    createdAt       DateTime      @default(now())
+    user            User          @relation(fields: [userId], references: [id])
+    boardingStop    Location      @relation("BoardingStop", fields: [boardingStopId], references: [id])
+    alightingStop   Location      @relation("AlightingStop", fields: [alightingStopId], references: [id])
 
     outboundTrip Trip          @relation("OutboundTrip", fields: [outboundTripId], references: [id])
     returnTrip   Trip?         @relation("ReturnTrip", fields: [returnTripId], references: [id])
@@ -322,12 +323,13 @@ model Passenger {
 }
 
 model PassengerTrip {
-    id                    String    @id @default(uuid())
+    id                    String              @id @default(uuid())
     passengerId           String
     tripId                String
     boardingStopId        String
     alightingStopId       String
-    boardingToken         String    @unique
+    status                PassengerTripStatus @default(RESERVED)
+    boardingToken         String?
     seatNo                Int?
     boardedAt             DateTime?
     alightedAt            DateTime?
@@ -431,6 +433,15 @@ model PaymentAttempt {
     updatedAt DateTime @updatedAt @map("updated_at")
 
     transaction Transaction @relation(fields: [transactionId], references: [id])
+}
+
+enum PassengerTripStatus {
+    RESERVED
+    SCHEDULED
+    BOARDED
+    ALIGHTED
+    NO_SHOW
+    CANCELLED
 }
 
 enum PaymentAttemptStatus {

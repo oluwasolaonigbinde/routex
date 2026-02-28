@@ -28,9 +28,9 @@ import {
 import { PassengerTripApiResponse } from '@/modules/booking/entities/passenger.entity';
 import { PassengersListApiResponse } from '@/modules/booking/entities/booking.entity';
 import { PaginatedResponse } from '@/util/dto';
-import { TripService } from '@/modules/booking/services/trip.service';
 import { DriverSearchPassengerTripsDto } from '@/modules/booking/dto/trip.driver.dto';
 import type { DriverAccessTokenDTO } from '@/modules/driver/entities/driver.entity';
+import { TripDriverService } from '@/modules/booking/services/trip.driver.service';
 
 @Controller('driver/trips')
 @ApiTags('Driver Trips Management')
@@ -39,7 +39,7 @@ export class DriverTripsController {
     constructor(
         private readonly tripExecutionService: TripExecutionService,
         private readonly db: DatabaseService,
-        private readonly tripService: TripService,
+        private readonly tripService: TripDriverService,
     ) {}
 
     @Post('board-passenger')
@@ -222,10 +222,11 @@ export class DriverTripsController {
         @Param('tripId') tripId: string,
         @Query() query: DriverSearchPassengerTripsDto,
     ): Promise<PaginatedResponse<PassengerTrip>> {
-        const results = await this.tripService.getPassengerTrips(tripId, {
-            ...query,
-            driverId: user.sub,
-        });
+        const results = await this.tripService.getPassengerTrips(
+            tripId,
+            user.sub,
+            query,
+        );
 
         return {
             status: 'success',

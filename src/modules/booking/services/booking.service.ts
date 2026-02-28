@@ -30,7 +30,6 @@ import {
 import {
     BookingWithDetails,
     BookingWithDetailsInclude,
-    BookingWithPassengerTripsInclude,
 } from '@/modules/booking/types';
 import {
     BookingCancelledEvent,
@@ -225,11 +224,11 @@ export class BookingService {
                             returnTrip?.priceOverride ||
                             returnTrip?.route.basePrice ||
                             0;
-                        const totalPrice = returnTripId
-                            ? (pricePerSeatForOutgoingTrip +
-                                  pricePerSeatForReturnTrip) *
-                              passengerCount
-                            : pricePerSeatForOutgoingTrip * passengerCount;
+                        const pricePerSeat = returnTrip
+                            ? pricePerSeatForOutgoingTrip +
+                              pricePerSeatForReturnTrip
+                            : pricePerSeatForOutgoingTrip;
+                        const totalPrice = pricePerSeat * passengerCount;
 
                         // Create booking
                         const booking = await tx.booking.create({
@@ -244,6 +243,7 @@ export class BookingService {
                                     alightingStopId ||
                                     outboundTrip.route.endLocationId,
                                 totalPrice,
+                                pricePerSeat: pricePerSeat,
                                 passengers: {
                                     create: passengers.map((p) => ({
                                         firstName: p.firstName,
@@ -264,19 +264,10 @@ export class BookingService {
 
                         for (const passenger of booking.passengers) {
                             // Outbound trip
-                            const outboundBoardingToken =
-                                this.passengerService.generateBoardingToken(
-                                    passenger.id,
-                                    outboundTrip.id,
-                                    booking.id,
-                                    outboundTrip.departureTime,
-                                );
-
                             const outboundPT = await tx.passengerTrip.create({
                                 data: {
                                     passengerId: passenger.id,
                                     tripId: outboundTrip.id,
-                                    boardingToken: outboundBoardingToken,
                                     boardingStopId:
                                         boardingStopId ||
                                         outboundTrip.route.startLocationId,
@@ -289,19 +280,10 @@ export class BookingService {
 
                             // Return trip if exists
                             if (returnTrip) {
-                                const returnBoardingToken =
-                                    this.passengerService.generateBoardingToken(
-                                        passenger.id,
-                                        returnTrip.id,
-                                        booking.id,
-                                        returnTrip.departureTime,
-                                    );
-
                                 const returnPT = await tx.passengerTrip.create({
                                     data: {
                                         passengerId: passenger.id,
                                         tripId: returnTrip.id,
-                                        boardingToken: returnBoardingToken,
                                         boardingStopId:
                                             returnTrip.route.startLocationId,
                                         alightingStopId:
@@ -433,7 +415,13 @@ export class BookingService {
         const transaction = await this.db.transaction.findUnique({
             where: { id: transactionId },
             include: {
-                booking: true,
+                booking: {
+                    include: {
+                        passengers: true,
+                        outboundTrip: true,
+                        returnTrip: true,
+                    },
+                },
             },
         });
 
@@ -451,11 +439,59 @@ export class BookingService {
             return;
         }
 
-        await this.db.booking.update({
-            where: { id: booking.id },
-            data: {
-                status: BookingStatus.CONFIRMED,
-            },
+        await this.db.$transaction(async (tx) => {
+            await tx.booking.update({
+                where: { id: booking.id },
+                data: {
+                    status: BookingStatus.CONFIRMED,
+                },
+            });
+
+            for (const passenger of booking.passengers) {
+                const outboundBoardingToken =
+                    this.passengerService.generateBoardingToken(
+                        passenger.id,
+                        booking.outboundTrip.id,
+                        booking.id,
+                        booking.outboundTrip.departureTime,
+                    );
+
+                await tx.passengerTrip.update({
+                    where: {
+                        passengerId_tripId: {
+                            passengerId: passenger.id,
+                            tripId: booking.outboundTrip.id,
+                        },
+                    },
+                    data: {
+                        boardingToken: outboundBoardingToken,
+                        status: 'SCHEDULED',
+                    },
+                });
+
+                if (booking.returnTrip) {
+                    const returnBoardingToken =
+                        this.passengerService.generateBoardingToken(
+                            passenger.id,
+                            booking.returnTrip.id,
+                            booking.id,
+                            booking.returnTrip.departureTime,
+                        );
+
+                    await tx.passengerTrip.update({
+                        where: {
+                            passengerId_tripId: {
+                                passengerId: passenger.id,
+                                tripId: booking.returnTrip.id,
+                            },
+                        },
+                        data: {
+                            boardingToken: returnBoardingToken,
+                            status: 'SCHEDULED',
+                        },
+                    });
+                }
+            }
         });
 
         this.eventEmitter.emit(
@@ -607,50 +643,6 @@ export class BookingService {
         }
 
         return booking;
-    }
-
-    /**
-     * Get boarding passes for a booking
-     */
-    async getBoardingPasses(bookingId: string) {
-        const booking = await this.db.booking.findUnique({
-            where: { id: bookingId },
-            include: BookingWithPassengerTripsInclude,
-        });
-
-        if (!booking) {
-            throw new BookingNotFoundException(bookingId);
-        }
-
-        const passes: Array<{
-            passengerId: string;
-            passengerName: string;
-            passengerCode: string;
-            tripId: string;
-            tripCode: string;
-            routeCode: string;
-            qrCodeData: string;
-            boardedAt: Date | null;
-            seatNo: number | null;
-        }> = [];
-
-        for (const passenger of booking.passengers) {
-            for (const pt of passenger.passengerTrips) {
-                passes.push({
-                    passengerId: passenger.id,
-                    passengerName: `${passenger.firstName} ${passenger.lastName}`,
-                    passengerCode: passenger.code,
-                    tripId: pt.tripId,
-                    tripCode: pt.trip.code,
-                    routeCode: pt.trip.route.code,
-                    qrCodeData: pt.boardingToken,
-                    boardedAt: pt.boardedAt,
-                    seatNo: pt.seatNo,
-                });
-            }
-        }
-
-        return passes;
     }
 
     /**
