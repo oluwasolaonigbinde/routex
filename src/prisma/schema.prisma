@@ -281,6 +281,7 @@ model Booking {
     alightingStopId String
     paidAt          DateTime?
     refundedAt      DateTime?
+    cancellationFee Int?
     status          BookingStatus @default(PENDING)
     createdAt       DateTime      @default(now())
     user            User          @relation(fields: [userId], references: [id])
@@ -384,29 +385,46 @@ model Wallet {
     user User @relation(fields: [userId], references: [id])
 }
 
+model BankAccount {
+    id            String   @id @default(uuid())
+    bankName      String
+    bankCode      String
+    accountNumber String
+    accountName   String
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+
+    transactions Transaction[]
+}
+
 model Transaction {
-    id          String             @id @default(uuid())
+    id          String                  @id @default(uuid())
     type        TransactionType
-    amount      Int // net amount settled to the user
-    gross       Int?
-    gatewayFee  Int?
+    amount      Float // net amount settled 
+    gross       Float?
+    gatewayFee  Float?
     gateway     String?
-    reference   String             @unique
+    reference   String                  @unique
+    reason      String?
     bookingId   String?
-    balance     Int? // balance after this transaction
+    balance     Float? // balance after this transaction
     intent      TransactionIntent
-    source      TransactionSource?
+    source      TransactionSource
+    destination TransactionDestination
+    bankId      String?                 @map("bank_id")
+    bank        BankAccount?            @relation(fields: [bankId], references: [id])
     description String
     metadata    Json?
-    failedAt    DateTime?          @map("failed_at")
-    succeededAt DateTime?          @map("succeeded_at")
+    failedAt    DateTime?               @map("failed_at")
+    succeededAt DateTime?               @map("succeeded_at")
 
     status       TransactionStatus @default(PENDING)
     createdAt    DateTime          @default(now())
     approvedById String?
 
     userId String
-    user   User   @relation(fields: [userId], references: [id])
+
+    user User @relation(fields: [userId], references: [id])
 
     approvedBy Admin? @relation(fields: [approvedById], references: [id])
 
@@ -453,6 +471,7 @@ enum PaymentAttemptStatus {
 enum TransactionIntent {
     WALLET_TOPUP
     BOOKING_PAYMENT
+    BOOKING_CANCELLATION_FEE
 }
 
 enum BookingStatus {
@@ -467,6 +486,12 @@ enum PaymentSource {
     WALLET
 }
 
+enum TransactionDestination {
+    WALLET
+    BANK_ACCOUNT
+    PLATFORM
+}
+
 enum TransactionType {
     CREDIT
     DEBIT
@@ -476,6 +501,7 @@ enum TransactionSource {
     INSTANT_TRANSFER
     WALLET
     CARD
+    PLATFORM
 }
 
 enum TransactionStatus {

@@ -53,6 +53,9 @@ export class Booking implements PrismaBooking {
     @ApiProperty({ type: Date, nullable: true })
     refundedAt: Date | null;
 
+    @ApiProperty({ type: Number, nullable: true })
+    cancellationFee: number | null;
+
     @ApiProperty({ enum: BookingStatus })
     status: BookingStatus;
 
@@ -71,6 +74,7 @@ export class BookingEntity extends PickType(Booking, [
     'boardingStopId',
     'alightingStopId',
     'paidAt',
+    'cancellationFee',
     'status',
     'createdAt',
 ] as const) {

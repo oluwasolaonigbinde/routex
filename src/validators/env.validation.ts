@@ -80,6 +80,48 @@ export class EnvironmentVariables {
     @Type(() => Number)
     @Min(1)
     TRIP_START_WINDOW_AFTER_MIN: number = 30;
+
+    /** Maximum days in advance a booking can be made (default: 30). */
+    @IsOptional()
+    @IsNumber()
+    @Type(() => Number)
+    @Min(1)
+    BOOKING_MAX_ADVANCE_DAYS: number = 30;
+
+    /** Hours before departure after which cancellation is blocked (default: 3). */
+    @IsOptional()
+    @IsNumber()
+    @Type(() => Number)
+    @Min(0)
+    CANCELLATION_CUTOFF_HOURS: number = 3;
+
+    /** Percentage of totalPrice charged as cancellation penalty (default: 5). */
+    @IsOptional()
+    @IsNumber()
+    @Type(() => Number)
+    @Min(0)
+    @Max(100)
+    CANCELLATION_PENALTY_PERCENT: number = 5;
+
+    /**
+     * Maximum cancellation penalty.
+     * Defaults to (≈ ₦2,000). Set to 0 to disable the cap.
+     */
+    @IsOptional()
+    @IsNumber()
+    @Type(() => Number)
+    @Min(0)
+    CANCELLATION_PENALTY_CAP: number = 2000;
+
+    /**
+     * Minutes after booking creation during which cancellation is free.
+     * Defaults to 30. Set to 0 to disable the grace period.
+     */
+    @IsOptional()
+    @IsNumber()
+    @Type(() => Number)
+    @Min(0)
+    CANCELLATION_GRACE_PERIOD_MIN: number = 15;
 }
 
 export function validate(config: Record<string, unknown>) {

@@ -1,10 +1,43 @@
 import { PaginatedResponse } from '@/types';
 import { ExposeAll } from '@/util/decorator';
 import { ApiProperty, PickType } from '@nestjs/swagger';
-import { $Enums, Transaction as PrismaTransaction } from '@prisma/client';
+import {
+    $Enums,
+    Transaction as PrismaTransaction,
+    BankAccount as PrismaBankAccount,
+} from '@prisma/client';
 import type { JsonValue } from '@prisma/client/runtime/client';
 import { Type } from 'class-transformer';
-import { IsEnum, IsNumber, IsString, IsUUID } from 'class-validator';
+import { IsEnum, IsNumber, IsString, IsUUID, Length } from 'class-validator';
+
+export class BankAccount implements PrismaBankAccount {
+    @ApiProperty({ type: String })
+    @IsUUID()
+    id: string;
+
+    @ApiProperty({ type: Date })
+    createdAt: Date;
+
+    @ApiProperty({ type: Date })
+    updatedAt: Date;
+
+    @ApiProperty({ type: String })
+    @IsString()
+    bankCode: string;
+
+    @ApiProperty({ type: String })
+    @IsString()
+    @Length(11, 11)
+    accountNumber: string;
+
+    @ApiProperty({ type: String })
+    @IsString()
+    accountName: string;
+
+    @ApiProperty({ type: String })
+    @IsString()
+    bankName: string;
+}
 
 export class Transaction implements PrismaTransaction {
     @ApiProperty({ type: String })
@@ -23,6 +56,10 @@ export class Transaction implements PrismaTransaction {
     @IsString()
     balance: number | null;
 
+    @ApiProperty({ enum: $Enums.TransactionDestination })
+    @IsEnum($Enums.TransactionDestination)
+    destination: $Enums.TransactionDestination;
+
     @ApiProperty({ type: Date, nullable: true })
     createdAt: Date;
 
@@ -34,6 +71,10 @@ export class Transaction implements PrismaTransaction {
     @IsString()
     bookingId: string | null;
 
+    @ApiProperty({ type: String, nullable: true })
+    @IsString()
+    reason: string | null;
+
     @ApiProperty({ type: Date, nullable: true })
     failedAt: Date | null;
 
@@ -44,6 +85,10 @@ export class Transaction implements PrismaTransaction {
     @ApiProperty({ type: Number, nullable: true })
     @IsNumber()
     gatewayFee: number | null;
+
+    @ApiProperty({ type: String, nullable: true })
+    @IsUUID()
+    bankId: string | null;
 
     @ApiProperty({ type: Number, nullable: true })
     @IsNumber()
@@ -67,17 +112,13 @@ export class Transaction implements PrismaTransaction {
     @ApiProperty({ type: Date, nullable: true })
     succeededAt: Date | null;
 
-    @ApiProperty({ enum: $Enums.TransactionSource, nullable: true })
+    @ApiProperty({ enum: $Enums.TransactionSource })
     @IsEnum($Enums.TransactionSource)
-    source: $Enums.TransactionSource | null;
+    source: $Enums.TransactionSource;
 
     @ApiProperty({ enum: $Enums.TransactionType })
     @IsEnum($Enums.TransactionType)
     type: $Enums.TransactionType;
-
-    @ApiProperty({ type: String, nullable: true })
-    @IsUUID()
-    walletId: string | null;
 
     @ApiProperty({ type: String })
     @IsUUID()
@@ -94,6 +135,8 @@ export class TransactionEntity extends PickType(Transaction, [
     'description',
     'failedAt',
     'gateway',
+    'destination',
+    'source',
     'gatewayFee',
     'gross',
     'intent',
@@ -103,7 +146,6 @@ export class TransactionEntity extends PickType(Transaction, [
     'succeededAt',
     'source',
     'type',
-    'walletId',
     'userId',
 ] as const) {}
 

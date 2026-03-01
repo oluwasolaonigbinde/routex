@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { DatabaseService } from '@/modules/database/database.service';
 import {
@@ -24,6 +25,8 @@ import {
     BookingAlreadyCancelledException,
     BookingCancellationNotAllowedException,
     BookingNotFoundException,
+    BookingTooFarInAdvanceException,
+    CancellationWindowPassedException,
     InsufficientSeatsException,
     InvalidStopException,
 } from '@/modules/booking/exceptions/booking.exception';
@@ -40,7 +43,7 @@ import {
     TripNotBookableException,
     TripNotFoundException,
 } from '@/modules/booking/exceptions/trip.exception';
-import { format } from 'date-fns';
+import { addDays, addHours, addMinutes, format } from 'date-fns';
 import { PaymentChannel } from '@/modules/payment/types/payment';
 import { TransactionIntentsToEventMap } from '@/modules/payment/transaction-intent';
 
@@ -55,6 +58,7 @@ export class BookingService {
         private readonly paymentService: PaymentService,
         private readonly tripCreationService: TripCreationService,
         private readonly eventEmitter: EventEmitter2,
+        private readonly config: ConfigService,
     ) {}
 
     /**
@@ -146,6 +150,20 @@ export class BookingService {
                         ) {
                             throw new TripNotBookableException(
                                 `Trip is in ${outboundTrip.status} status and cannot be booked`,
+                            );
+                        }
+
+                        // Prevent booking too far in advance
+                        const maxAdvanceDays = this.config.get<number>(
+                            'BOOKING_MAX_ADVANCE_DAYS',
+                            30,
+                        );
+                        if (
+                            outboundTrip.departureTime >
+                            addDays(new Date(), maxAdvanceDays)
+                        ) {
+                            throw new BookingTooFarInAdvanceException(
+                                maxAdvanceDays,
                             );
                         }
 
@@ -259,7 +277,7 @@ export class BookingService {
                             },
                         });
 
-                        // Create passenger trips with boarding tokens
+                        // Create passenger trips
                         const passengerTrips: PassengerTrip[] = [];
 
                         for (const passenger of booking.passengers) {
@@ -339,17 +357,22 @@ export class BookingService {
                     {
                         amount: result.booking.totalPrice,
                         bookingId: result.booking.id,
-                        description: `Payment for ${result.booking.returnTrip ? 'outbound trip' : ''} ${result.booking.outboundTrip.code} from ${result.booking.outboundTrip.route.startLocation.name} 
-                                    to ${result.booking.outboundTrip.route.endLocation.name} on ${format(result.booking.outboundTrip.departureTime, 'EEEE yyyy-MM-dd')}
+                        description: `Payment for 
+                                    ${result.booking.returnTrip ? 'outbound trip' : ''} ${result.booking.outboundTrip.code} from 
+                                    ${result.booking.outboundTrip.route.startLocation.name} to ${result.booking.outboundTrip.route.endLocation.name} on ${format(result.booking.outboundTrip.departureTime, 'EEEE yyyy-MM-dd')}
                                    ${
                                        result.booking.returnTrip
                                            ? `and return trip ${result.booking.returnTrip.code} from ${result.booking.returnTrip.route.startLocation.name} to 
                                              ${result.booking.returnTrip.route.endLocation.name} on ${format(result.booking.returnTrip.departureTime, 'EEEE yyyy-MM-dd')}`
                                            : ''
                                    } for ${passengers.length} passenger(s)
-                                    `,
-                        type: 'CREDIT',
+                                    `
+                            .replace(/\s+/g, ' ')
+                            .trim(),
+                        type: 'DEBIT',
                         intent: 'BOOKING_PAYMENT',
+                        source: paymentMethod,
+                        destination: 'PLATFORM',
                     },
                 );
 
@@ -515,8 +538,24 @@ export class BookingService {
     ): Promise<void> {
         this.logger.log(`Cancelling booking ${bookingId} for user ${userId}`);
 
-        // Execute all DB consistency logic inside a single transaction
-        await this.db.$transaction(async (tx) => {
+        const cutoffHours = this.config.get<number>(
+            'CANCELLATION_CUTOFF_HOURS',
+            24,
+        );
+        const penaltyPercent = this.config.get<number>(
+            'CANCELLATION_PENALTY_PERCENT',
+            5,
+        );
+        const penaltyCap = this.config.get<number>(
+            'CANCELLATION_PENALTY_CAP',
+            5000,
+        );
+        const gracePeriodMin = this.config.get<number>(
+            'CANCELLATION_GRACE_PERIOD_MIN',
+            30,
+        );
+
+        const booking = await this.db.$transaction(async (tx) => {
             const booking = await tx.booking.findUnique({
                 where: { id: bookingId },
                 include: {
@@ -533,6 +572,18 @@ export class BookingService {
                 throw new BookingAlreadyCancelledException(bookingId);
             }
 
+            if (booking.status === BookingStatus.PENDING) {
+                throw new BookingCancellationNotAllowedException(
+                    'Cannot cancel a booking that has not been paid for',
+                );
+            }
+
+            if (booking.status === BookingStatus.REFUNDED) {
+                throw new BookingCancellationNotAllowedException(
+                    'Cannot cancel a booking that has already been refunded',
+                );
+            }
+
             if (
                 booking.outboundTrip.status !== TripStatus.SCHEDULED ||
                 (booking.returnTrip &&
@@ -543,14 +594,40 @@ export class BookingService {
                 );
             }
 
+            // Enforce cancellation cutoff window
+            const cutoffDeadline = addHours(new Date(), cutoffHours);
+            if (
+                booking.outboundTrip.departureTime <= cutoffDeadline &&
+                (!booking.returnTrip ||
+                    booking.returnTrip.departureTime <= cutoffDeadline)
+            ) {
+                throw new CancellationWindowPassedException(cutoffHours);
+            }
+
+            // Calculate penalty fee
+            // - No fee within the free cancellation grace period
+            // - Otherwise: penaltyPercent% of totalPrice, capped at penaltyCap
+            const withinGracePeriod =
+                gracePeriodMin > 0 &&
+                new Date() <= addMinutes(booking.createdAt, gracePeriodMin);
+
+            const rawPenalty = !withinGracePeriod
+                ? booking.totalPrice * (penaltyPercent / 100)
+                : 0;
+            const fee =
+                penaltyCap > 0 ? Math.min(rawPenalty, penaltyCap) : rawPenalty;
+
             const passengerCount = await tx.passenger.count({
                 where: { bookingId },
             });
 
-            // Update booking status
+            // Update booking status and persist the fee
             await tx.booking.update({
                 where: { id: bookingId },
-                data: { status: BookingStatus.CANCELLED },
+                data: {
+                    status: BookingStatus.CANCELLED,
+                    cancellationFee: fee,
+                },
             });
 
             // Restore seats
@@ -570,19 +647,85 @@ export class BookingService {
                 });
             }
 
-            return booking;
+            await tx.passengerTrip.updateMany({
+                where: {
+                    passenger: {
+                        bookingId,
+                    },
+                },
+                data: {
+                    status: 'CANCELLED',
+                },
+            });
+
+            return tx.booking.findUniqueOrThrow({
+                where: { id: bookingId },
+                include: {
+                    outboundTrip: {
+                        include: {
+                            route: {
+                                include: {
+                                    startLocation: true,
+                                    endLocation: true,
+                                },
+                            },
+                        },
+                    },
+                    returnTrip: {
+                        include: {
+                            route: {
+                                include: {
+                                    startLocation: true,
+                                    endLocation: true,
+                                },
+                            },
+                        },
+                    },
+                    passengers: true,
+                },
+            });
         });
 
-        // if (shouldRefund && paymentReference) {
-        //     await this.paymentService.processRefund(paymentReference);
-        // }
+        const transaction = await this.paymentService.createTransaction(
+            userId,
+            {
+                amount: booking.totalPrice - (booking.cancellationFee || 0),
+                bookingId,
+                description: `Booking refund for 
+                                ${booking.returnTrip ? 'outbound trip' : ''} ${booking.outboundTrip.code} from 
+                                ${booking.outboundTrip.route.startLocation.name} to ${booking.outboundTrip.route.endLocation.name} on ${format(booking.outboundTrip.departureTime, 'EEEE yyyy-MM-dd')}
+                                ${
+                                    booking.returnTrip
+                                        ? `and return trip ${booking.returnTrip.code} from ${booking.returnTrip.route.startLocation.name} to 
+                                            ${booking.returnTrip.route.endLocation.name} on ${format(booking.returnTrip.departureTime, 'EEEE yyyy-MM-dd')}`
+                                        : ''
+                                } for ${booking.passengers.length} passenger(s) on Personal wallet`
+                    .replace(/\s+/g, ' ')
+                    .trim(),
+                type: 'CREDIT',
+                intent: 'BOOKING_CANCELLATION_FEE',
+                source: 'PLATFORM',
+                destination: 'WALLET',
+            },
+        );
+
+        await this.paymentService.transferFunds({
+            transactionId: transaction.id,
+        });
 
         this.eventEmitter.emit(
             'booking.cancelled',
-            new BookingCancelledEvent(bookingId, userId, reason),
+            new BookingCancelledEvent(
+                bookingId,
+                userId,
+                booking.cancellationFee || 0,
+                reason,
+            ),
         );
 
-        this.logger.log(`Booking ${bookingId} cancelled successfully`);
+        this.logger.log(
+            `Booking ${bookingId} cancelled successfully. Fee: ${booking.cancellationFee || 0}`,
+        );
     }
 
     /**

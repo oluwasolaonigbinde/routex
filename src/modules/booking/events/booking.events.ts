@@ -26,6 +26,7 @@ export class BookingCancelledEvent {
     constructor(
         public readonly bookingId: string,
         public readonly userId: string,
+        public readonly cancellationFee: number,
         public readonly reason?: string,
     ) {}
 }

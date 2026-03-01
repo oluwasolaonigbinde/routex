@@ -151,3 +151,27 @@ export class InvalidStopException extends HttpException {
         );
     }
 }
+
+export class BookingTooFarInAdvanceException extends HttpException {
+    constructor(maxDays: number) {
+        super(
+            {
+                status: 'failed',
+                message: `Bookings cannot be made more than ${maxDays} day(s) in advance`,
+            },
+            HttpStatus.BAD_REQUEST,
+        );
+    }
+}
+
+export class CancellationWindowPassedException extends HttpException {
+    constructor(cutoffHours: number) {
+        super(
+            {
+                status: 'failed',
+                message: `Bookings cannot be cancelled within ${cutoffHours} hour(s) of departure`,
+            },
+            HttpStatus.BAD_REQUEST,
+        );
+    }
+}

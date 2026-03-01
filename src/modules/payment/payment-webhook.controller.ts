@@ -88,7 +88,7 @@ export class PaymentWebhookController {
                 req.body.event === 'transfer.success'
             ) {
                 // Process event asynchronously
-                void this.paymentService.processTransaction(
+                void this.paymentService.handleTransactionProcessed(
                     req.body.data.reference,
                     'SUCCESS',
                     'INSTANT_TRANSFER',

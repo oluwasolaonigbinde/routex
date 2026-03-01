@@ -909,6 +909,8 @@ async function main() {
                 intent: 'BOOKING_PAYMENT',
                 reference,
                 bookingId: booking.id,
+                source: 'WALLET',
+                destination: 'PLATFORM',
             },
         });
 

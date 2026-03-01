@@ -1,13 +1,6 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import {
-    Prisma,
-    Wallet,
-    TransactionSource,
-    TransactionStatus,
-    TransactionType,
-} from '@prisma/client';
-import { nanoid } from 'nanoid';
+import { Wallet, TransactionStatus } from '@prisma/client';
 import { DatabaseService } from '@/modules/database/database.service';
 import { InsufficientWalletBalanceException } from '@/modules/wallet/exceptions/wallet.exception';
 import { WalletFundedEvent } from '@/modules/wallet/events/wallet.events';
@@ -64,6 +57,8 @@ export class WalletService {
                 intent: 'WALLET_TOPUP',
                 type: 'CREDIT',
                 bookingId: null,
+                source: 'INSTANT_TRANSFER',
+                destination: 'PLATFORM',
             },
         );
 
@@ -94,7 +89,7 @@ export class WalletService {
 
         const wallet = await this.getWallet(transaction.userId);
 
-        // Atomically update wallet balance and mark transaction SUCCESS
+        // Atomically update wallet balance
         const [updatedWallet] = await this.db.$transaction(async (tx) => {
             const updatedWallet = await tx.wallet.upsert({
                 where: { id: wallet.id },
@@ -159,10 +154,36 @@ export class WalletService {
             data: { balance: { decrement: transaction.amount } },
         });
 
-        await this.paymentService.processTransaction(
+        await this.paymentService.handleTransactionProcessed(
             transaction.reference,
             'SUCCESS',
-            'INSTANT_TRANSFER',
+        );
+    }
+
+    @OnEvent('wallet.credit')
+    async creditWallet({ transactionId }: { transactionId: string }) {
+        this.logger.log(`Crediting wallet for transaction ${transactionId}`);
+
+        const transaction = await this.db.transaction.findUniqueOrThrow({
+            where: { id: transactionId },
+        });
+
+        const wallet = await this.getWallet(transaction.userId);
+
+        if (!wallet) {
+            throw new BadRequestException(
+                'Transaction not associated with a wallet',
+            );
+        }
+
+        await this.db.wallet.update({
+            where: { id: wallet.id },
+            data: { balance: { increment: transaction.amount } },
+        });
+
+        await this.paymentService.handleTransactionProcessed(
+            transaction.reference,
+            'SUCCESS',
         );
     }
 }

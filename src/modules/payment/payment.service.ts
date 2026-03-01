@@ -12,12 +12,7 @@ import { PaymentVerificationFailedException } from '@/modules/booking/exceptions
 import { v4 as uuidv4 } from 'uuid';
 import { TransactionIntentsToEventMap } from '@/modules/payment/transaction-intent';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import {
-    Prisma,
-    TransactionSource,
-    TransactionStatus,
-    TransactionType,
-} from '@prisma/client';
+import { Prisma, TransactionSource, TransactionStatus } from '@prisma/client';
 import { TransactionWithIdNotFoundException } from '@/modules/payment/exception/transaction';
 import { convertTo2DecimalPlaces } from '@/util/util';
 import {
@@ -30,16 +25,7 @@ import {
     PaymentChannel,
     WalletChannel,
 } from '@/modules/payment/types/payment';
-
-interface PaystackInitializeResponse {
-    status: boolean;
-    message: string;
-    data: {
-        authorization_url: string;
-        access_code: string;
-        reference: string;
-    };
-}
+import { Transaction } from '@/modules/payment/entities/transaction';
 
 interface PaystackVerifyResponse {
     status: boolean;
@@ -124,8 +110,6 @@ export class PaymentService {
             }
         }
 
-        console.log('klds', Math.round(charge * 100) / 100);
-
         return charge - netSettlement;
     }
 
@@ -135,12 +119,37 @@ export class PaymentService {
 
     async createTransaction(userId: string, transaction: CreateTransactionDto) {
         const reference = this.createReference();
+        const { bank, ...rest } = transaction;
+
+        if (bank) {
+            const { accountName } = await this.resolveBankAccount(
+                bank.accountNumber,
+                bank.bankCode,
+            );
+
+            const createdBank = await this.db.bankAccount.create({
+                data: {
+                    ...bank,
+                    accountName,
+                    bankName: bank.bankCode,
+                },
+            });
+
+            return await this.db.transaction.create({
+                data: {
+                    ...rest,
+                    userId,
+                    reference,
+                    bankId: createdBank.id,
+                },
+            });
+        }
 
         return await this.db.transaction.create({
             data: {
-                ...transaction,
+                ...rest,
                 userId,
-                reference: reference,
+                reference,
             },
         });
     }
@@ -156,7 +165,7 @@ export class PaymentService {
         };
     }
 
-    async payWithCard(transactionId: string): Promise<CardChannel> {
+    async payWithCard(): Promise<CardChannel> {
         return Promise.resolve({
             channel: 'card',
             status: 'processing',
@@ -198,7 +207,7 @@ export class PaymentService {
             };
         }>('/transaction/initialize', {
             email: transaction.user.email,
-            amount: Math.round(gross * 100),
+            amount: Math.round(gross * 100), // convert to kobo
             reference: transaction.reference,
             metadata: {
                 paymentAttemptId: paymentAttempt.id,
@@ -219,26 +228,26 @@ export class PaymentService {
 
     async acceptPayment(params: {
         transactionId: string;
-        source: typeof TransactionSource.WALLET;
+        source?: typeof TransactionSource.WALLET;
     }): Promise<WalletChannel>;
     async acceptPayment(params: {
         transactionId: string;
-        source: typeof TransactionSource.CARD;
+        source?: typeof TransactionSource.CARD;
     }): Promise<CardChannel>;
     async acceptPayment(params: {
         transactionId: string;
-        source: typeof TransactionSource.INSTANT_TRANSFER;
+        source?: typeof TransactionSource.INSTANT_TRANSFER;
     }): Promise<InstantTransferChannel>;
     async acceptPayment(params: {
         transactionId: string;
-        source: TransactionSource;
+        source?: TransactionSource;
     }): Promise<PaymentChannel>;
     async acceptPayment({
         transactionId,
-        source,
+        source: _source,
     }: {
         transactionId: string;
-        source: TransactionSource;
+        source?: TransactionSource;
     }): Promise<PaymentChannel> {
         const transaction = await this.db.transaction.findUnique({
             where: { id: transactionId },
@@ -246,12 +255,6 @@ export class PaymentService {
 
         if (!transaction) {
             throw new TransactionWithIdNotFoundException(transactionId);
-        }
-
-        if (transaction.type !== TransactionType.CREDIT) {
-            throw new BadRequestException(
-                'Only credit transactions can be accepted',
-            );
         }
 
         if (
@@ -263,10 +266,19 @@ export class PaymentService {
             );
         }
 
+        if (_source) {
+            await this.db.transaction.update({
+                where: { id: transactionId },
+                data: { source: _source },
+            });
+        }
+
+        const source = _source || transaction.source;
+
         if (source === TransactionSource.WALLET) {
             return await this.payWithWallet(transactionId);
         } else if (source === TransactionSource.CARD) {
-            return this.payWithCard(transactionId);
+            return this.payWithCard();
         } else if (source === TransactionSource.INSTANT_TRANSFER) {
             return this.payWithInstantTransfer(transactionId);
         } else {
@@ -274,74 +286,163 @@ export class PaymentService {
         }
     }
 
-    // async transferFunds({
-    //     transactionId,
-    //     reason,
-    // }: {
-    //     transactionId: string;
-    //     reason: string;
-    // }) {
-    //     const transaction = await this.db.transaction.findUnique({
-    //         where: { id: transactionId },
-    //     });
+    async resolveBankAccount(
+        accountNumber: string,
+        bankCode: string,
+    ): Promise<{ accountName: string; accountNumber: string }> {
+        try {
+            const response = await this.paystackClient.get<{
+                status: boolean;
+                message: string;
+                data: {
+                    account_number: string;
+                    account_name: string;
+                    bank_id: number;
+                };
+            }>(`/bank/resolve`, {
+                params: {
+                    account_number: accountNumber,
+                    bank_code: bankCode,
+                },
+            });
 
-    //     if (!transaction) {
-    //         throw new TransactionWithIdNotFoundException(transactionId);
-    //     }
+            return {
+                accountName: response.data.data.account_name,
+                accountNumber: response.data.data.account_number,
+            };
+        } catch {
+            throw new BadRequestException('Unable to resolve bank account');
+        }
+    }
 
-    //     if (transaction.type !== TransactionType.DEBIT) {
-    //         throw new BadRequestException(
-    //             'Only debit transactions can be transferred',
-    //         );
-    //     }
+    async createTransferRecipient({
+        accountNumber,
+        bankCode,
+        name,
+    }: {
+        accountNumber: string;
+        bankCode: string;
+        name: string;
+    }): Promise<{ recipientCode: string }> {
+        const recipient = await this.paystackClient.post<{
+            status: boolean;
+            message: string;
+            data: {
+                recipient_code: string;
+                name: string;
+                type: string;
+            };
+        }>(`/transferrecipient`, {
+            type: 'nuban',
+            name: name,
+            account_number: accountNumber,
+            bank_code: bankCode,
+            currency: 'NGN',
+        });
 
-    //     if (
-    //         transaction.status === TransactionStatus.SUCCESS ||
-    //         transaction.status === TransactionStatus.FAILED
-    //     ) {
-    //         throw new BadRequestException(
-    //             'Transaction can no longer be accepted. It is already in a terminal state.',
-    //         );
-    //     }
+        return { recipientCode: recipient.data.data.recipient_code };
+    }
 
-    //     if (!transaction.bankAccountId) {
-    //         throw new BadRequestException(
-    //             'Transaction is missing bank account information',
-    //         );
-    //     }
+    async initiateTransfer({
+        recipientCode,
+        amount,
+        reason,
+        reference,
+    }: {
+        recipientCode: string;
+        amount: number;
+        reason: string;
+        reference: string;
+    }): Promise<void> {
+        try {
+            await this.paystackClient.post<{
+                status: boolean;
+                message: string;
+                data: {
+                    transfer_code: string;
+                    amount: number;
+                    currency: string;
+                    status: string;
+                };
+            }>(`/transfer`, {
+                source: 'balance',
+                amount: amount * 100,
+                recipient: recipientCode,
+                reason: reason,
+                reference: reference,
+            });
+        } catch (error) {
+            this.logger.log('error', error);
+            throw error;
+        }
+    }
 
-    //     const bank = await this.databaseService.bankAccount.findUnique({
-    //         where: { id: transaction.bankAccountId },
-    //     });
+    async transferToBankAccount(
+        transaction: Prisma.TransactionGetPayload<{
+            include: { bank: true };
+        }>,
+    ) {
+        const bank = transaction.bank;
 
-    //     if (!bank) throw new NotFoundException('Bank account not found');
+        if (!bank) throw new NotFoundException('Bank account not found');
 
-    //     const gateway = this.paymentsFactory.getGateway(this.gatewayType);
+        const recipientCode = (
+            await this.createTransferRecipient({
+                accountNumber: bank.accountNumber,
+                bankCode: bank.bankCode,
+                name: bank.accountName,
+            })
+        ).recipientCode;
 
-    //     let recipientCode = bank.paystackRecipientCode;
+        await this.initiateTransfer({
+            recipientCode,
+            amount: transaction.amount,
+            reason: '',
+            // reason: `Transfer for transaction ${transaction.id}`,
+            reference: transaction.reference,
+        });
+    }
 
-    //     if (!recipientCode) {
-    //         recipientCode = (
-    //             await this.createTransferRecipient({
-    //                 accountNumber: bank.accountNumber,
-    //                 bankCode: bank.bankCode,
-    //                 name: bank.accountName,
-    //             })
-    //         ).recipientCode;
+    transferToWallet(transaction: Transaction) {
+        this.eventEmitter.emit('wallet.credit', {
+            transactionId: transaction.id,
+        });
+    }
 
-    //         await this.databaseService.bankAccount.update({
-    //             where: { id: bank.id },
-    //             data: { paystackRecipientCode: recipientCode },
-    //         });
-    //     }
+    async transferFunds({
+        transactionId,
+    }: {
+        transactionId: string;
+        reason?: string;
+    }) {
+        const transaction = await this.db.transaction.findUnique({
+            where: { id: transactionId },
+            include: { bank: true },
+        });
 
-    //     await gateway.initiateTransfer({
-    //         amount: transaction.amount.toNumber(),
-    //         reason: reason || '',
-    //         recipientCode: recipientCode || '',
-    //         reference: transaction.reference,
-    //     });
-    // }
+        if (!transaction) {
+            throw new TransactionWithIdNotFoundException(transactionId);
+        }
+
+        if (
+            transaction.status === TransactionStatus.SUCCESS ||
+            transaction.status === TransactionStatus.FAILED
+        ) {
+            throw new BadRequestException(
+                'Transaction can no longer be accepted. It is already in a terminal state.',
+            );
+        }
+
+        if (transaction.destination === 'BANK_ACCOUNT') {
+            await this.transferToBankAccount(transaction);
+        } else if (transaction.destination === 'WALLET') {
+            this.transferToWallet(transaction);
+        } else {
+            throw new BadRequestException(
+                'Unsupported transaction destination',
+            );
+        }
+    }
 
     /**
      * Verify a Paystack transaction
@@ -374,11 +475,16 @@ export class PaymentService {
                 paidAt: new Date(data.paid_at),
                 channel: data.channel,
             };
-        } catch (error) {
-            this.logger.error(
-                `Failed to verify payment: ${error.message}`,
-                error.stack,
-            );
+        } catch (error: unknown) {
+            if (error instanceof Error) {
+                this.logger.error(
+                    `Failed to verify payment: ${error.message}`,
+                    error.stack,
+                );
+            } else {
+                this.logger.error(`Failed to verify payment: ${String(error)}`);
+            }
+
             throw new PaymentVerificationFailedException(
                 'Failed to verify payment',
             );
@@ -404,7 +510,7 @@ export class PaymentService {
      * @param reference - Original payment reference
      * @returns Refund initiation result
      */
-    async processRefund(reference: string): Promise<{ initiated: boolean }> {
+    processRefund(reference: string): { initiated: boolean } {
         // Note: Paystack doesn't have automated refund API
         // Refunds must be processed manually via dashboard
         // This method logs the refund request for manual processing
@@ -421,10 +527,35 @@ export class PaymentService {
         return { initiated: true };
     }
 
-    async processTransaction(
+    /**
+     * Handle the final processing result for a transaction that was submitted
+     * to an asynchronous payment gateway.
+     *
+     * This method is intended to be called by gateway callbacks or background
+     * processors when a transaction has been settled (success) or failed.
+     *
+     * Behaviour and side-effects:
+     * - Loads the transaction by `reference` and validates it is not already
+     *   in a terminal state.
+     * - Updates any associated `PaymentAttempt` record (if `gateway.paymentAttemptId` is provided).
+     * - Updates the `Transaction` row with gateway metadata (gateway id, gatewayFee,
+     *   gross amount) and sets `succeededAt` or `failedAt` depending on `status`.
+     * - Emits an event based on the transaction `intent` (see `{@link TransactionIntentsToEventMap}`).
+     *
+     * @throws {NotFoundException} when the transaction reference cannot be found.
+     * @throws {BadRequestException} when the transaction is already in a terminal state.
+     *
+     * @param reference - The unique transaction reference generated at creation time
+     * @param status - Final status reported by the gateway: `'SUCCESS'` or `'FAILED'`
+     * @param source - The `TransactionSource` that initiated the transaction (wallet, card, instant_transfer)
+     * @param gateway - Optional gateway details including `gateway` name, `gatewayFee`,
+     *                  and an optional `paymentAttemptId` used to correlate gateway attempts
+     * @param approvedById - Optional user id who approved the transaction (admin flows)
+     */
+    async handleTransactionProcessed(
         reference: string,
         status: 'SUCCESS' | 'FAILED',
-        source: TransactionSource,
+        source?: TransactionSource,
         gateway?: {
             gateway: string;
             gatewayFee: number;
@@ -437,14 +568,18 @@ export class PaymentService {
         });
 
         if (!tx) {
-            throw new NotFoundException('Transaction not found');
+            this.logger.error(
+                `Transaction with reference ${reference} not found`,
+            );
+            return;
         }
 
         // check if transaction is in a terminal state
         if (tx.status === 'SUCCESS' || tx.status === 'FAILED') {
-            throw new BadRequestException(
-                'Transaction can no longer be processed. It is already in a terminal state.',
+            this.logger.warn(
+                `Transaction with reference ${reference} is already in terminal state ${tx.status}`,
             );
+            return;
         }
 
         if (gateway?.paymentAttemptId) {
@@ -462,7 +597,7 @@ export class PaymentService {
                 gateway: gateway?.gateway,
                 gatewayFee: gateway?.gatewayFee,
                 gross: tx.amount + (gateway?.gatewayFee || 0),
-                source: source,
+                ...(source && { source: source }),
                 ...(status === 'SUCCESS' && { succeededAt: new Date() }),
                 ...(status === 'FAILED' && { failedAt: new Date() }),
                 approvedById: approvedById,
@@ -485,7 +620,9 @@ export class PaymentService {
 
         const where: Prisma.TransactionWhereInput = {
             ...filter,
-            status: TransactionStatus.SUCCESS,
+            status: {
+                notIn: ['PENDING'],
+            },
         };
 
         const [transactions, totalCount] = await Promise.all([
