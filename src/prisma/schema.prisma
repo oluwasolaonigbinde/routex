@@ -271,22 +271,23 @@ model TripStopStatus {
 }
 
 model Booking {
-    id              String        @id @default(uuid())
-    userId          String
-    outboundTripId  String
-    returnTripId    String?
-    totalPrice      Int
-    pricePerSeat    Int
-    boardingStopId  String
-    alightingStopId String
-    paidAt          DateTime?
-    refundedAt      DateTime?
-    cancellationFee Int?
-    status          BookingStatus @default(PENDING)
-    createdAt       DateTime      @default(now())
-    user            User          @relation(fields: [userId], references: [id])
-    boardingStop    Location      @relation("BoardingStop", fields: [boardingStopId], references: [id])
-    alightingStop   Location      @relation("AlightingStop", fields: [alightingStopId], references: [id])
+    id                   String        @id @default(uuid())
+    userId               String
+    outboundTripId       String
+    returnTripId         String?
+    totalPrice           Int
+    reservationExpiresAt DateTime
+    pricePerSeat         Int
+    boardingStopId       String
+    alightingStopId      String
+    paidAt               DateTime?
+    refundedAt           DateTime?
+    cancellationFee      Int?
+    status               BookingStatus @default(PENDING)
+    createdAt            DateTime      @default(now())
+    user                 User          @relation(fields: [userId], references: [id])
+    boardingStop         Location      @relation("BoardingStop", fields: [boardingStopId], references: [id])
+    alightingStop        Location      @relation("AlightingStop", fields: [alightingStopId], references: [id])
 
     outboundTrip Trip          @relation("OutboundTrip", fields: [outboundTripId], references: [id])
     returnTrip   Trip?         @relation("ReturnTrip", fields: [returnTripId], references: [id])
@@ -398,25 +399,25 @@ model BankAccount {
 }
 
 model Transaction {
-    id          String                  @id @default(uuid())
+    id          String                 @id @default(uuid())
     type        TransactionType
     amount      Float // net amount settled 
     gross       Float?
     gatewayFee  Float?
     gateway     String?
-    reference   String                  @unique
+    reference   String                 @unique
     reason      String?
     bookingId   String?
     balance     Float? // balance after this transaction
     intent      TransactionIntent
     source      TransactionSource
     destination TransactionDestination
-    bankId      String?                 @map("bank_id")
-    bank        BankAccount?            @relation(fields: [bankId], references: [id])
+    bankId      String?                @map("bank_id")
+    bank        BankAccount?           @relation(fields: [bankId], references: [id])
     description String
     metadata    Json?
-    failedAt    DateTime?               @map("failed_at")
-    succeededAt DateTime?               @map("succeeded_at")
+    failedAt    DateTime?              @map("failed_at")
+    succeededAt DateTime?              @map("succeeded_at")
 
     status       TransactionStatus @default(PENDING)
     createdAt    DateTime          @default(now())
@@ -457,7 +458,7 @@ enum PassengerTripStatus {
     RESERVED
     SCHEDULED
     BOARDED
-    ALIGHTED
+    COMPLETED
     NO_SHOW
     CANCELLED
 }
@@ -478,7 +479,7 @@ enum BookingStatus {
     PENDING
     CONFIRMED
     CANCELLED
-    REFUNDED
+    EXPIRED
 }
 
 enum PaymentSource {

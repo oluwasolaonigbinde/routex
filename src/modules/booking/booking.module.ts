@@ -21,6 +21,7 @@ import { TripUserService } from '@/modules/booking/services/trip.user.service';
 import { WalletModule } from '@/modules/wallet/wallet.module';
 import { PaymentModule } from '@/modules/payment/payment.module';
 import { TripDriverService } from '@/modules/booking/services/trip.driver.service';
+import { BookingCronService } from '@/modules/booking/services/booking-cron.service';
 
 @Module({
     imports: [UsersModule, DriverModule, WalletModule, PaymentModule],
@@ -44,6 +45,8 @@ import { TripDriverService } from '@/modules/booking/services/trip.driver.servic
         TripUserService,
         RouteService,
         TripService,
+        // Cron jobs
+        BookingCronService,
         TripCronService,
         // Guards
         BookingOwnershipGuard,

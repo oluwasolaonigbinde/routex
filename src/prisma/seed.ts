@@ -805,7 +805,8 @@ async function main() {
         boardingStopId?: string;
         alightingStopId?: string;
         paidAt?: Date;
-        status: 'PENDING' | 'CONFIRMED' | 'CANCELLED' | 'REFUNDED';
+        status: 'PENDING' | 'CONFIRMED' | 'CANCELLED';
+        reservationExpiresAt: Date;
         passengers: Array<{
             id: string;
             firstName: string;
@@ -894,6 +895,7 @@ async function main() {
                 alightingStopId: actualAlightingStopId,
                 paidAt: def.paidAt,
                 status: def.status,
+                reservationExpiresAt: def.reservationExpiresAt,
                 pricePerSeat: def.pricePerSeat,
             },
         });
@@ -976,6 +978,7 @@ async function main() {
         boardingStopId: IDS.jibowu,
         alightingStopId: IDS.utako,
         paidAt: new Date(),
+        reservationExpiresAt: new Date(),
         status: 'CONFIRMED',
         passengers: [
             {
@@ -1023,6 +1026,7 @@ async function main() {
         boardingStopId: IDS.jibowu,
         alightingStopId: IDS.akure,
         paidAt: new Date(),
+        reservationExpiresAt: new Date(),
         status: 'CONFIRMED',
         passengers: [
             {
@@ -1055,6 +1059,7 @@ async function main() {
         boardingStopId: IDS.berger,
         alightingStopId: IDS.utako,
         status: 'PENDING',
+        reservationExpiresAt: new Date(),
         passengers: [
             {
                 id: IDS.psg3a,
@@ -1113,6 +1118,7 @@ async function main() {
         boardingStopId: IDS.jibowu,
         alightingStopId: IDS.akure,
         paidAt: new Date(yesterday.getTime() - 86400000),
+        reservationExpiresAt: new Date(),
         status: 'CONFIRMED',
         passengers: [
             {
@@ -1144,6 +1150,7 @@ async function main() {
         totalPrice: 18000,
         paidAt: new Date(),
         status: 'CANCELLED',
+        reservationExpiresAt: new Date(),
         pricePerSeat: 18000,
         passengers: [
             {

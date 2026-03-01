@@ -35,6 +35,9 @@ export class Booking implements PrismaBooking {
     @IsNumber()
     totalPrice: number;
 
+    @ApiProperty({ type: Date })
+    reservationExpiresAt: Date;
+
     @ApiProperty({ type: String })
     @IsString()
     boardingStopId: string;
@@ -73,6 +76,7 @@ export class BookingEntity extends PickType(Booking, [
     'pricePerSeat',
     'boardingStopId',
     'alightingStopId',
+    'reservationExpiresAt',
     'paidAt',
     'cancellationFee',
     'status',

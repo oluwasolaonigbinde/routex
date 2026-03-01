@@ -122,6 +122,13 @@ export class EnvironmentVariables {
     @Type(() => Number)
     @Min(0)
     CANCELLATION_GRACE_PERIOD_MIN: number = 15;
+
+    /** Minutes after which unpaid bookings are automatically expired (default: 15). */
+    @IsOptional()
+    @IsNumber()
+    @Type(() => Number)
+    @Min(1)
+    BOOKING_PAYMENT_TIMEOUT_MIN: number = 15;
 }
 
 export function validate(config: Record<string, unknown>) {

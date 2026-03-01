@@ -30,7 +30,7 @@ async function bootstrap() {
     app.set('trust proxy', 1);
     await app.listen(process.env.PORT || 4000);
 }
-// MockDate.set(new Date('2026-03-13T06:00:00Z'));
+// MockDate.set(new Date('2026-03-01T19:40:17.865Z'));
 
 bootstrap().catch((error: unknown) => {
     console.error('Unknown bootstrap error', error);

@@ -254,6 +254,12 @@ export class BookingService {
                                 userId,
                                 outboundTripId,
                                 returnTripId,
+                                reservationExpiresAt: addMinutes(
+                                    new Date(),
+                                    this.config.get<number>(
+                                        'BOOKING_PAYMENT_TIMEOUT_MIN',
+                                    ) ?? 15,
+                                ),
                                 boardingStopId:
                                     boardingStopId ||
                                     outboundTrip.route.startLocationId,
@@ -578,12 +584,6 @@ export class BookingService {
                 );
             }
 
-            if (booking.status === BookingStatus.REFUNDED) {
-                throw new BookingCancellationNotAllowedException(
-                    'Cannot cancel a booking that has already been refunded',
-                );
-            }
-
             if (
                 booking.outboundTrip.status !== TripStatus.SCHEDULED ||
                 (booking.returnTrip &&
@@ -655,6 +655,7 @@ export class BookingService {
                 },
                 data: {
                     status: 'CANCELLED',
+                    boardingToken: null,
                 },
             });
 
