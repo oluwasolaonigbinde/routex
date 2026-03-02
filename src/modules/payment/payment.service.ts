@@ -14,18 +14,27 @@ import { TransactionIntentsToEventMap } from '@/modules/payment/transaction-inte
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma, TransactionSource, TransactionStatus } from '@prisma/client';
 import { TransactionWithIdNotFoundException } from '@/modules/payment/exception/transaction';
+import {
+    CardNotFoundException,
+    CardNotReusableException,
+    CardRequiredForPaymentException,
+} from '@/modules/payment/exception/card';
 import { convertTo2DecimalPlaces } from '@/util/util';
 import {
     CreateTransactionDto,
     QueryTransactionsDto,
 } from '@/modules/payment/dto/transaction';
 import {
-    CardChannel,
-    InstantTransferChannel,
     PaymentChannel,
-    WalletChannel,
+    PaystackPaymentChannels,
+    PaystackWebhookRequest,
 } from '@/modules/payment/types/payment';
 import { Transaction } from '@/modules/payment/entities/transaction';
+import {
+    CardChannel,
+    InstantTransferChannel,
+    WalletChannel,
+} from '@/modules/payment/entities/payment';
 
 interface PaystackVerifyResponse {
     status: boolean;
@@ -165,15 +174,94 @@ export class PaymentService {
         };
     }
 
-    async payWithCard(): Promise<CardChannel> {
-        return Promise.resolve({
+    async payWithCard(
+        transactionId: string,
+        cardId: string,
+    ): Promise<CardChannel> {
+        const paymentAttempt = await this.db.paymentAttempt.create({
+            data: {
+                transactionId: transactionId,
+                gateway: 'paystack',
+            },
+            include: {
+                transaction: true,
+            },
+        });
+
+        const transaction = paymentAttempt.transaction;
+
+        const card = await this.db.card.findUnique({
+            where: { id: cardId },
+        });
+
+        if (!card) {
+            throw new CardNotFoundException(cardId);
+        }
+
+        if (card.userId !== transaction.userId) {
+            throw new CardNotFoundException(cardId);
+        }
+
+        if (!card.reusable) {
+            throw new CardNotReusableException();
+        }
+
+        const fee = convertTo2DecimalPlaces(
+            this.estimateTransactionFee(transaction.amount),
+        );
+        const net = convertTo2DecimalPlaces(transaction.amount);
+        const gross = convertTo2DecimalPlaces(net + fee);
+
+        const response = await this.paystackClient.post<{
+            status: boolean;
+            message: string;
+            data: {
+                reference: string;
+                status: string;
+                authorization_url?: string;
+                paused?: boolean;
+            };
+        }>('/transaction/charge_authorization', {
+            authorization_code: card.authorizationCode,
+            email: card.email,
+            amount: Math.round(gross * 100), // convert to kobo
+            reference: transaction.reference,
+            metadata: {
+                paymentAttemptId: paymentAttempt.id,
+            },
+        });
+
+        const data = response.data.data;
+
+        // 2FA challenge — user needs to authorize via URL
+        if (data.paused) {
+            return {
+                channel: 'card',
+                status: 'processing',
+                checkoutUrl: data.authorization_url || '',
+                reference: transaction.reference,
+                amount: gross,
+                fee: fee,
+                net: net,
+                expiresIn: '1h',
+            };
+        }
+
+        return {
             channel: 'card',
             status: 'processing',
-        });
+            checkoutUrl: '',
+            reference: transaction.reference,
+            amount: gross,
+            fee: fee,
+            net: net,
+            expiresIn: '1h',
+        };
     }
 
     async payWithInstantTransfer(
         transactionId: string,
+        channels?: PaystackPaymentChannels[],
     ): Promise<InstantTransferChannel> {
         const paymentAttempt = await this.db.paymentAttempt.create({
             data: {
@@ -212,6 +300,7 @@ export class PaymentService {
             metadata: {
                 paymentAttemptId: paymentAttempt.id,
             },
+            ...(channels && channels.length > 0 ? { channels } : undefined),
         });
 
         return {
@@ -233,21 +322,29 @@ export class PaymentService {
     async acceptPayment(params: {
         transactionId: string;
         source?: typeof TransactionSource.CARD;
+        cardId?: string;
     }): Promise<CardChannel>;
     async acceptPayment(params: {
         transactionId: string;
         source?: typeof TransactionSource.INSTANT_TRANSFER;
+        channels?: PaystackPaymentChannels[];
     }): Promise<InstantTransferChannel>;
     async acceptPayment(params: {
         transactionId: string;
         source?: TransactionSource;
+        cardId?: string;
+        channels?: PaystackPaymentChannels[];
     }): Promise<PaymentChannel>;
     async acceptPayment({
         transactionId,
         source: _source,
+        cardId,
+        channels,
     }: {
         transactionId: string;
         source?: TransactionSource;
+        cardId?: string;
+        channels?: PaystackPaymentChannels[];
     }): Promise<PaymentChannel> {
         const transaction = await this.db.transaction.findUnique({
             where: { id: transactionId },
@@ -278,9 +375,12 @@ export class PaymentService {
         if (source === TransactionSource.WALLET) {
             return await this.payWithWallet(transactionId);
         } else if (source === TransactionSource.CARD) {
-            return this.payWithCard();
+            if (!cardId) {
+                throw new CardRequiredForPaymentException();
+            }
+            return this.payWithCard(transactionId, cardId);
         } else if (source === TransactionSource.INSTANT_TRANSFER) {
-            return this.payWithInstantTransfer(transactionId);
+            return this.payWithInstantTransfer(transactionId, channels);
         } else {
             throw new BadRequestException('Unsupported transaction source');
         }
@@ -556,11 +656,7 @@ export class PaymentService {
         reference: string,
         status: 'SUCCESS' | 'FAILED',
         source?: TransactionSource,
-        gateway?: {
-            gateway: string;
-            gatewayFee: number;
-            paymentAttemptId: string;
-        },
+        gateway?: PaystackWebhookRequest,
         approvedById?: string,
     ) {
         const tx = await this.db.transaction.findUnique({
@@ -582,21 +678,30 @@ export class PaymentService {
             return;
         }
 
-        if (gateway?.paymentAttemptId) {
+        const paymentAttemptId = (
+            gateway?.data.metadata as { paymentAttemptId?: string }
+        )?.paymentAttemptId;
+
+        if (paymentAttemptId) {
             await this.db.paymentAttempt.update({
-                where: { id: gateway.paymentAttemptId },
-                data: { status: status === 'SUCCESS' ? 'SUCCESS' : 'FAILED' },
+                where: { id: paymentAttemptId },
+                data: {
+                    status: status === 'SUCCESS' ? 'SUCCESS' : 'FAILED',
+                    responsePayload: gateway,
+                },
             });
         }
+
+        const fees = (gateway?.data.fees || 0) / 100;
 
         // mark transaction state
         await this.db.transaction.update({
             where: { reference },
             data: {
                 status: status,
-                gateway: gateway?.gateway,
-                gatewayFee: gateway?.gatewayFee,
-                gross: tx.amount + (gateway?.gatewayFee || 0),
+                gateway: 'PAYSTACK',
+                gatewayFee: fees,
+                gross: tx.amount + (fees || 0),
                 ...(source && { source: source }),
                 ...(status === 'SUCCESS' && { succeededAt: new Date() }),
                 ...(status === 'FAILED' && { failedAt: new Date() }),
@@ -607,7 +712,10 @@ export class PaymentService {
         // emit event based on transaction intent
         const eventName = TransactionIntentsToEventMap[tx.intent];
         if (eventName) {
-            this.eventEmitter.emit(eventName, { transactionId: tx.id });
+            this.eventEmitter.emit(eventName, {
+                transactionId: tx.id,
+                paymentAttemptId,
+            });
         }
     }
 

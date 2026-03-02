@@ -7,7 +7,7 @@ import {
     CardChannel,
     InstantTransferChannel,
     WalletChannel,
-} from '@/modules/payment/types/payment';
+} from '@/modules/payment/entities/payment';
 
 // ========== Base Entities ==========
 

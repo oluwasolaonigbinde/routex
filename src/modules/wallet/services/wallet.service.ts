@@ -7,7 +7,7 @@ import { WalletFundedEvent } from '@/modules/wallet/events/wallet.events';
 import { PaymentService } from '@/modules/payment/payment.service';
 import { FundWalletDto } from '@/modules/wallet/dto/wallet.dto';
 import { TransactionIntentsToEventMap } from '@/modules/payment/transaction-intent';
-import { InstantTransferChannel } from '@/modules/payment/types/payment';
+import { InstantTransferChannel } from '@/modules/payment/entities/payment';
 
 @Injectable()
 export class WalletService {

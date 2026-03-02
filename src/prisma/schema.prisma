@@ -41,6 +41,7 @@ model User {
     bookings                 Booking[]
     wallet                   Wallet?
     transactions             Transaction[]
+    cards                    Card[]
 }
 
 model Admin {
@@ -463,6 +464,33 @@ enum PassengerTripStatus {
     CANCELLED
 }
 
+model Card {
+    id                String    @id @default(uuid())
+    userId            String
+    authorizationCode String    @map("authorization_code")
+    cardType          String    @map("card_type")
+    last4             String
+    expMonth          String    @map("exp_month")
+    expYear           String    @map("exp_year")
+    bin               String
+    bank              String
+    channel           String
+    signature         String
+    countryCode       String?   @map("country_code")
+    accountName       String?   @map("account_name")
+    reusable          Boolean   @default(true)
+    email             String
+    isDefault         Boolean   @default(false) @map("is_default")
+    createdAt         DateTime  @default(now()) @map("created_at")
+    updatedAt         DateTime  @updatedAt @map("updated_at")
+    deletedAt         DateTime? @map("deleted_at")
+
+    user User @relation(fields: [userId], references: [id])
+
+    @@unique([userId, signature])
+    @@index([userId])
+}
+
 enum PaymentAttemptStatus {
     PENDING
     SUCCESS
@@ -473,6 +501,7 @@ enum TransactionIntent {
     WALLET_TOPUP
     BOOKING_PAYMENT
     BOOKING_CANCELLATION_FEE
+    ADD_CARD
 }
 
 enum BookingStatus {

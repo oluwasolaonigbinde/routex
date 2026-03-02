@@ -17,6 +17,7 @@ import { PaymentService } from '@/modules/payment/payment.service';
 import { ConfigService } from '@nestjs/config';
 import { EnvironmentVariables } from '@/validators/env.validation';
 import { PaystackWebhookRequest } from '@/modules/payment/types/payment';
+import { DatabaseService } from '@/modules/database/database.service';
 
 interface PaystackWebhookPayload {
     event: string;
@@ -40,6 +41,7 @@ export class PaymentWebhookController {
     constructor(
         private readonly configService: ConfigService<EnvironmentVariables>,
         private readonly paymentService: PaymentService,
+        private readonly db: DatabaseService,
     ) {
         this.secretKey =
             this.configService.get<string>('PAYSTACK_SECRET_KEY') || '';
@@ -92,16 +94,7 @@ export class PaymentWebhookController {
                     req.body.data.reference,
                     'SUCCESS',
                     'INSTANT_TRANSFER',
-                    {
-                        gateway: 'paystack',
-                        gatewayFee: req.body.data.amount / 100,
-                        paymentAttemptId:
-                            (
-                                req.body.data.metadata as {
-                                    paymentAttemptId: string;
-                                }
-                            ).paymentAttemptId || '',
-                    },
+                    req.body,
                 );
             }
 

@@ -1,64 +1,20 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNumber, IsString } from 'class-validator';
+import {
+    CardChannel,
+    InstantTransferChannel,
+    WalletChannel,
+} from '@/modules/payment/entities/payment';
 
-export class CardChannel {
-    @ApiProperty({
-        type: String,
-        enum: ['processing', 'pending', 'success', 'failed'],
-    })
-    status: 'processing' | 'pending' | 'success' | 'failed';
-
-    @ApiProperty({ type: String, enum: ['card'] })
-    channel: 'card';
-}
-
-export class WalletChannel {
-    @ApiProperty({
-        type: String,
-        enum: ['processing', 'pending', 'success', 'failed'],
-    })
-    status: 'processing' | 'pending' | 'success' | 'failed';
-
-    @ApiProperty({ type: String, enum: ['wallet'] })
-    channel: 'wallet';
-}
-
-export class InstantTransferChannel {
-    @ApiProperty({ type: String })
-    @IsString()
-    checkoutUrl: string;
-
-    @ApiProperty({ type: String })
-    @IsString()
-    expiresIn: string;
-
-    @ApiProperty({ type: Number })
-    @IsNumber()
-    amount: number;
-
-    @ApiProperty({ type: Number })
-    @IsNumber()
-    fee: number;
-
-    @ApiProperty({ type: Number })
-    @IsNumber()
-    net: number;
-
-    @ApiProperty({ type: String })
-    @IsString()
-    reference: string;
-
-    @ApiProperty({ type: String, enum: ['instant_transfer'] })
-    @IsString()
-    channel: 'instant_transfer';
-
-    @ApiProperty({
-        type: String,
-        enum: ['processing', 'pending', 'success', 'failed'],
-    })
-    @IsString()
-    status: 'processing' | 'pending' | 'success' | 'failed';
-}
+export type PaystackPaymentChannels =
+    | 'card'
+    | 'bank'
+    | 'apple_pay'
+    | 'ussd'
+    | 'qr'
+    | 'mobile_money'
+    | 'bank_transfer'
+    | 'eft'
+    | 'capitec_pay'
+    | 'payattitude';
 
 export type PaymentChannel =
     | CardChannel
@@ -66,7 +22,7 @@ export type PaymentChannel =
     | InstantTransferChannel;
 
 export type PaystackWebhookRequest = {
-    event: 'charge.success';
+    event: 'charge.success' | 'transfer.success';
     data: {
         id: number;
         domain: string;
@@ -82,5 +38,22 @@ export type PaystackWebhookRequest = {
         ip_address: string;
         metadata: any;
         fees: number;
+        customer: {
+            email: string;
+        };
+        authorization: {
+            authorization_code: string;
+            card_type: string;
+            last4: string;
+            exp_month: string;
+            exp_year: string;
+            bin: string;
+            bank: string;
+            channel: string;
+            signature: string;
+            reusable: boolean;
+            country_code: string;
+            account_name: string | null;
+        };
     };
 };

@@ -38,6 +38,15 @@ export class CreateBookingDto {
 
     @ApiProperty({
         example: 'uuid',
+        description: 'Card ID to charge. Required when paymentMethod is CARD',
+        required: false,
+    })
+    @IsUUID()
+    @IsOptional()
+    cardId?: string;
+
+    @ApiProperty({
+        example: 'uuid',
         description:
             'Boarding stop location ID. If not provided, defaults to the start location of the trip',
         required: false,
@@ -137,6 +146,15 @@ export class CreateBookingFromScheduleDto {
     })
     @IsEnum(TransactionSource)
     paymentMethod: TransactionSource;
+
+    @ApiProperty({
+        example: 'uuid',
+        description: 'Card ID to charge. Required when paymentMethod is CARD',
+        required: false,
+    })
+    @IsUUID()
+    @IsOptional()
+    cardId?: string;
 
     @ApiProperty({
         type: [CreatePassengerDto],

@@ -96,6 +96,7 @@ export class BookingService {
             alightingStopId: dto.alightingStopId,
             passengers: dto.passengers,
             paymentMethod: dto.paymentMethod,
+            cardId: dto.cardId,
         });
     }
 
@@ -113,6 +114,7 @@ export class BookingService {
             alightingStopId,
             passengers,
             paymentMethod,
+            cardId,
         } = params;
 
         const passengerCount = passengers.length;
@@ -385,6 +387,7 @@ export class BookingService {
                 const payment = await this.paymentService.acceptPayment({
                     source: paymentMethod,
                     transactionId: transaction.id,
+                    cardId,
                 });
 
                 // Emit event
@@ -759,7 +762,10 @@ export class BookingService {
                     outboundTrip: true,
                     returnTrip: true,
                 },
-                orderBy: { createdAt: 'desc' },
+                orderBy: {
+                    outboundTrip: { departureTime: 'asc' },
+                    returnTrip: { departureTime: 'asc' },
+                },
             }),
             this.db.booking.count({ where }),
         ]);
