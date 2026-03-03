@@ -7,41 +7,42 @@ datasource db {
 }
 
 model User {
-    id                       String           @id @default(uuid()) @map("id")
-    email                    String           @map("email")
-    username                 String           @unique @map("username")
-    displayPhotoKey          String?          @map("display_photo_key")
-    createdAt                DateTime         @default(now()) @map("created_at")
-    updatedAt                DateTime         @updatedAt @map("updated_at")
-    firstName                String?          @map("first_name")
-    lastName                 String?          @map("last_name")
-    password                 String           @map("password")
-    tenant                   Tenant           @map("tenant")
-    emailVerifiedAt          DateTime?        @map("email_verified_at")
-    require2Fa               Boolean          @default(false) @map("require_2fa")
-    requireEmailVerification Boolean          @default(false) @map("require_email_verification")
-    city                     String?          @map("city")
-    phone                    String?          @map("phone")
-    referralCode             String?          @map("referral_code")
-    dateOfBirth              DateTime?        @map("date_of_birth")
-    credentialStatus         CredentialStatus @default(ACTIVE) @map("credential_status")
-    passwordResetRequired    Boolean          @default(false) @map("password_reset_required")
-    twoFactorEnabled         Boolean          @default(false) @map("two_factor_enabled")
-    twoFactorSecret          String?          @map("two_factor_secret")
-    twoFactorMethod          String?          @map("two_factor_method")
-    lockedAt                 DateTime?        @map("locked_at")
-    deletedAt                DateTime?        @map("deleted_at")
-    suspendedAt              DateTime?        @map("suspend_at")
-    blockedAt                DateTime?        @map("blocked_at")
-    lockExpiresAt            DateTime?        @map("lock_expires_at")
+    id                       String             @id @default(uuid()) @map("id")
+    email                    String             @map("email")
+    username                 String             @unique @map("username")
+    displayPhotoKey          String?            @map("display_photo_key")
+    createdAt                DateTime           @default(now()) @map("created_at")
+    updatedAt                DateTime           @updatedAt @map("updated_at")
+    firstName                String?            @map("first_name")
+    lastName                 String?            @map("last_name")
+    password                 String             @map("password")
+    tenant                   Tenant             @map("tenant")
+    emailVerifiedAt          DateTime?          @map("email_verified_at")
+    require2Fa               Boolean            @default(false) @map("require_2fa")
+    requireEmailVerification Boolean            @default(false) @map("require_email_verification")
+    city                     String?            @map("city")
+    phone                    String?            @map("phone")
+    referralCode             String?            @map("referral_code")
+    dateOfBirth              DateTime?          @map("date_of_birth")
+    credentialStatus         CredentialStatus   @default(ACTIVE) @map("credential_status")
+    passwordResetRequired    Boolean            @default(false) @map("password_reset_required")
+    twoFactorEnabled         Boolean            @default(false) @map("two_factor_enabled")
+    twoFactorSecret          String?            @map("two_factor_secret")
+    twoFactorMethod          String?            @map("two_factor_method")
+    lockedAt                 DateTime?          @map("locked_at")
+    deletedAt                DateTime?          @map("deleted_at")
+    suspendedAt              DateTime?          @map("suspend_at")
+    blockedAt                DateTime?          @map("blocked_at")
+    lockExpiresAt            DateTime?          @map("lock_expires_at")
     pin                      String?
-    pinFailedAttempts        Int              @default(0) @map("pin_failed_attempts")
-    pinLockedUntil           DateTime?        @map("pin_locked_until")
+    pinFailedAttempts        Int                @default(0) @map("pin_failed_attempts")
+    pinLockedUntil           DateTime?          @map("pin_locked_until")
     backupCodes              BackupCode[]
     bookings                 Booking[]
     wallet                   Wallet?
     transactions             Transaction[]
     cards                    Card[]
+    emergencyContacts        EmergencyContact[]
 }
 
 model Admin {
@@ -488,6 +489,22 @@ model Card {
     user User @relation(fields: [userId], references: [id])
 
     @@unique([userId, signature])
+    @@index([userId])
+}
+
+model EmergencyContact {
+    id           String    @id @default(uuid())
+    userId       String    @map("user_id")
+    firstName    String    @map("first_name")
+    lastName     String    @map("last_name")
+    phone        String
+    relationship String
+    createdAt    DateTime  @default(now()) @map("created_at")
+    updatedAt    DateTime  @updatedAt @map("updated_at")
+    deletedAt    DateTime? @map("deleted_at")
+
+    user User @relation(fields: [userId], references: [id])
+
     @@index([userId])
 }
 

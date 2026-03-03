@@ -10,7 +10,9 @@ import {
     IsDate,
     IsNumber,
     IsOptional,
+    IsPhoneNumber,
     IsString,
+    IsUUID,
     MaxDate,
 } from 'class-validator';
 
@@ -227,4 +229,100 @@ export class GetUserResponse implements ApiResponse<UserPrivateEntity> {
     @ApiProperty({ type: UserPrivateEntity })
     @Type(() => UserPrivateEntity)
     data: UserPrivateEntity;
+}
+
+// ========== EmergencyContact ==========
+
+export class EmergencyContact {
+    @ApiProperty({ type: String })
+    @IsUUID()
+    id: string;
+
+    @ApiProperty({ type: String })
+    @IsUUID()
+    userId: string;
+
+    @ApiProperty({ type: String })
+    @IsString()
+    firstName: string;
+
+    @ApiProperty({ type: String })
+    @IsString()
+    lastName: string;
+
+    @ApiProperty({ type: String })
+    @IsPhoneNumber()
+    phone: string;
+
+    @ApiProperty({ type: String })
+    @IsString()
+    relationship: string;
+
+    @ApiProperty({ type: Date })
+    createdAt: Date;
+
+    @ApiProperty({ type: Date })
+    updatedAt: Date;
+
+    @ApiPropertyOptional({ type: Date, nullable: true })
+    deletedAt: Date | null;
+}
+
+@ExposeAll()
+export class EmergencyContactEntity extends PickType(EmergencyContact, [
+    'id',
+    'userId',
+    'firstName',
+    'lastName',
+    'phone',
+    'relationship',
+    'createdAt',
+] as const) {}
+
+@ExposeAll()
+export class EmergencyContactApiResponse implements ApiResponse<EmergencyContactEntity> {
+    @ApiProperty({ type: String })
+    status: 'pending' | 'success' | 'failed';
+
+    @ApiProperty({ type: String })
+    message: string;
+
+    @ApiProperty({ type: EmergencyContactEntity })
+    @Type(() => EmergencyContactEntity)
+    data: EmergencyContactEntity;
+}
+
+type EmergencyContactPaginatedResponse =
+    PaginatedResponse<EmergencyContactEntity>['data'];
+
+@ExposeAll()
+class EmergencyContactListResult implements EmergencyContactPaginatedResponse {
+    @ApiProperty({ type: Number })
+    totalCount: number;
+
+    @ApiProperty({ type: Number })
+    page: number;
+
+    @ApiProperty({ type: Number })
+    limit: number;
+
+    @ApiProperty({ type: Number })
+    perPage: number;
+
+    @ApiProperty({ type: [EmergencyContactEntity] })
+    @Type(() => EmergencyContactEntity)
+    results: EmergencyContactEntity[];
+}
+
+@ExposeAll()
+export class EmergencyContactListApiResponse implements PaginatedResponse<EmergencyContactEntity> {
+    @ApiProperty({ type: String })
+    status: 'pending' | 'success' | 'failed';
+
+    @ApiProperty({ type: String })
+    message: string;
+
+    @ApiProperty({ type: EmergencyContactListResult })
+    @Type(() => EmergencyContactListResult)
+    data: EmergencyContactListResult;
 }

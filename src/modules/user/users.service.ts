@@ -1,29 +1,41 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { DatabaseService } from '../database/database.service';
 import { convertTextToSlug } from '@/util/format';
-import { AbstractAuthService } from '../auth/auth.service';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { EnvironmentVariables } from '@/validators/env.validation';
-import { SessionService } from '../session/session.service';
-import { VerificationTokenService } from '../verification-token/verification-token.service';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { CreateUserDto, GetAllUsersDto, UpdateProfileDto } from './dto/dto';
 import { Tokens, UserAccessTokenClaims } from '@/types/auth';
-import type { Prisma } from '@prisma/client';
-import { DeviceInfo, LoginDto } from '../auth/dto/auth.dto';
+import type { EmergencyContact, Prisma, User } from '@prisma/client';
 import { plainToInstance } from 'class-transformer';
-import { UserPasswordResetRequestedEvent } from './events/user-password-reset-requested.event';
-import { UserPasswordChangedEvent } from './events/user-password-changed.event';
-import { ResetPasswordDto, ChangePasswordDto } from '../auth/dto/auth.dto';
-import { User } from './entities/user.entity';
 import { StorageService } from '@/storage/storage.service';
-import { UserCreatedEvent } from './events/user-created.event';
 import {
     UserWithEmailNotFoundException,
     UserWithIdNotFoundException,
     UserWithUsernameNotFoundException,
 } from '@/common/exception/exception';
+import { PaginatedResponse } from '@/types';
+import { PaginatedQuery } from '@/util/dto';
+import { AbstractAuthService } from '@/modules/auth/auth.service';
+import { DatabaseService } from '@/modules/database/database.service';
+import { SessionService } from '@/modules/session/session.service';
+import { VerificationTokenService } from '@/modules/verification-token/verification-token.service';
+import {
+    ChangePasswordDto,
+    DeviceInfo,
+    LoginDto,
+    ResetPasswordDto,
+} from '@/modules/auth/dto/auth.dto';
+import {
+    CreateEmergencyContactDto,
+    CreateUserDto,
+    GetAllUsersDto,
+    UpdateEmergencyContactDto,
+    UpdateProfileDto,
+} from '@/modules/user/dto/dto';
+import { UserCreatedEvent } from '@/modules/user/events/user-created.event';
+import { UserPasswordResetRequestedEvent } from '@/modules/user/events/user-password-reset-requested.event';
+import { UserPasswordChangedEvent } from '@/modules/user/events/user-password-changed.event';
+import { EmergencyContactNotFoundException } from '@/modules/user/exceptions/emergency-contact';
 
 @Injectable()
 export class UsersService extends AbstractAuthService {
@@ -331,5 +343,75 @@ export class UsersService extends AbstractAuthService {
         );
 
         return result;
+    }
+
+    // ========== Emergency Contacts ==========
+
+    async createEmergencyContact(
+        userId: string,
+        dto: CreateEmergencyContactDto,
+    ) {
+        return this.database.emergencyContact.create({
+            data: { userId, ...dto },
+        });
+    }
+
+    async getEmergencyContacts(
+        userId: string,
+        query: PaginatedQuery,
+    ): Promise<PaginatedResponse<EmergencyContact>['data']> {
+        const { page, limit } = query;
+        const skip = (page - 1) * limit;
+
+        const where: Prisma.EmergencyContactWhereInput = {
+            userId,
+            deletedAt: null,
+        };
+
+        const [results, totalCount] = await Promise.all([
+            this.database.emergencyContact.findMany({
+                where,
+                skip,
+                take: limit,
+                orderBy: { createdAt: 'desc' },
+            }),
+            this.database.emergencyContact.count({ where }),
+        ]);
+
+        return { totalCount, page, limit, results, perPage: results.length };
+    }
+
+    async updateEmergencyContact(
+        userId: string,
+        id: string,
+        dto: UpdateEmergencyContactDto,
+    ) {
+        await this.findEmergencyContactOrFail(userId, id);
+
+        return this.database.emergencyContact.update({
+            where: { id },
+            data: dto,
+        });
+    }
+
+    async removeEmergencyContact(userId: string, id: string) {
+        await this.findEmergencyContactOrFail(userId, id);
+
+        await this.database.emergencyContact.update({
+            where: { id },
+            data: { deletedAt: new Date() },
+        });
+    }
+
+    private async findEmergencyContactOrFail(userId: string, id: string) {
+        const contact = await this.database.emergencyContact.findUnique({
+            where: { id },
+        });
+
+        if (!contact || contact.userId !== userId || contact.deletedAt) {
+            throw new EmergencyContactNotFoundException(id);
+        }
+
+        return contact;
     }
 }

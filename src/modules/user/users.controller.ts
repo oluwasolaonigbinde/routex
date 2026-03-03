@@ -13,20 +13,6 @@ import {
     Delete,
     Param,
 } from '@nestjs/common';
-import { UsersService } from './users.service';
-import { SessionListResponse } from '../auth/entities/auth.entity';
-import type { AccessTokenDTO, RefreshToken } from '@/types/auth';
-import { Public } from '../auth/decorators/public-route.decorator';
-import {
-    ChangePasswordDto,
-    ForgotPasswordDto,
-    ResetPasswordDto,
-    LoginDto,
-    DeviceInfo,
-    VerifyEmailDto,
-} from '../auth/dto/auth.dto';
-import { RefreshTokenGuard } from '../auth/guard/refresh-auth.guard';
-import { Tenant } from '../auth/decorators/tenant.decorator';
 import {
     ApiBearerAuth,
     ApiOperation,
@@ -38,20 +24,41 @@ import {
     ApiNotFoundResponse,
     ApiConsumes,
 } from '@nestjs/swagger';
-import { UpdateProfileDto, CreateUserDto } from './dto/dto';
-import {
-    LoginUserResponse,
-    UserPrivateEntityApiResponse,
-} from './entities/user.entity';
 import { ApiResponse as ApiResponseType } from '@/types';
 import { FormDataRequest } from 'nestjs-form-data';
-import { RequiredScopes } from '../auth/decorators/scopes.decorator';
 import { SerializeOptions } from '@/util/decorator';
 import type { Request } from 'express';
 import { PaginatedQuery } from '@/util/dto';
-import { SessionService } from '../session/session.service';
 import { User } from '@prisma/client';
 import { UserToken } from '@/decorators/user';
+import { Tenant } from '@/modules/auth/decorators/tenant.decorator';
+import { UsersService } from '@/modules/user/users.service';
+import { SessionService } from '@/modules/session/session.service';
+import {
+    EmergencyContactApiResponse,
+    EmergencyContactListApiResponse,
+    LoginUserResponse,
+    UserPrivateEntityApiResponse,
+} from '@/modules/user/entities/user.entity';
+import {
+    CreateEmergencyContactDto,
+    CreateUserDto,
+    UpdateEmergencyContactDto,
+    UpdateProfileDto,
+} from '@/modules/user/dto/dto';
+import type { AccessTokenDTO, RefreshToken } from '@/types/auth';
+import {
+    ChangePasswordDto,
+    DeviceInfo,
+    ForgotPasswordDto,
+    LoginDto,
+    ResetPasswordDto,
+    VerifyEmailDto,
+} from '@/modules/auth/dto/auth.dto';
+import { Public } from '@/modules/auth/decorators/public-route.decorator';
+import { RequiredScopes } from '@/modules/auth/decorators/scopes.decorator';
+import { RefreshTokenGuard } from '@/modules/auth/guard/refresh-auth.guard';
+import { SessionListResponse } from '@/modules/auth/entities/auth.entity';
 
 @ApiTags('Users')
 @Controller('user')
@@ -415,6 +422,110 @@ export class UsersController {
         return {
             status: 'success',
             message: 'Device sessions revoked successfully',
+        };
+    }
+
+    // ========== Emergency Contacts ==========
+
+    @Post('emergency-contacts')
+    @HttpCode(HttpStatus.CREATED)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Add an emergency contact' })
+    @ApiResponse({
+        status: 201,
+        description: 'Emergency contact created',
+        type: EmergencyContactApiResponse,
+    })
+    @SerializeOptions({
+        type: EmergencyContactApiResponse,
+        strategy: 'excludeAll',
+    })
+    async createEmergencyContact(
+        @UserToken() user: AccessTokenDTO,
+        @Body() dto: CreateEmergencyContactDto,
+    ): Promise<EmergencyContactApiResponse> {
+        const data = await this.usersService.createEmergencyContact(
+            user.sub,
+            dto,
+        );
+        return {
+            status: 'success',
+            message: 'Emergency contact added successfully',
+            data,
+        };
+    }
+
+    @Get('emergency-contacts')
+    @HttpCode(HttpStatus.OK)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'List emergency contacts' })
+    @ApiResponse({
+        status: 200,
+        description: 'List of emergency contacts',
+        type: EmergencyContactListApiResponse,
+    })
+    @SerializeOptions({
+        type: EmergencyContactListApiResponse,
+        strategy: 'excludeAll',
+    })
+    async getEmergencyContacts(
+        @UserToken() user: AccessTokenDTO,
+        @Query() query: PaginatedQuery,
+    ): Promise<EmergencyContactListApiResponse> {
+        const data = await this.usersService.getEmergencyContacts(
+            user.sub,
+            query,
+        );
+        return {
+            status: 'success',
+            message: 'Emergency contacts retrieved successfully',
+            data,
+        };
+    }
+
+    @Patch('emergency-contacts/:id')
+    @HttpCode(HttpStatus.OK)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Update an emergency contact' })
+    @ApiResponse({
+        status: 200,
+        description: 'Emergency contact updated',
+        type: EmergencyContactApiResponse,
+    })
+    @SerializeOptions({
+        type: EmergencyContactApiResponse,
+        strategy: 'excludeAll',
+    })
+    async updateEmergencyContact(
+        @UserToken() user: AccessTokenDTO,
+        @Param('id') id: string,
+        @Body() dto: UpdateEmergencyContactDto,
+    ): Promise<EmergencyContactApiResponse> {
+        const data = await this.usersService.updateEmergencyContact(
+            user.sub,
+            id,
+            dto,
+        );
+        return {
+            status: 'success',
+            message: 'Emergency contact updated successfully',
+            data,
+        };
+    }
+
+    @Delete('emergency-contacts/:id')
+    @HttpCode(HttpStatus.OK)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Delete an emergency contact' })
+    @ApiResponse({ status: 200, description: 'Emergency contact deleted' })
+    async removeEmergencyContact(
+        @UserToken() user: AccessTokenDTO,
+        @Param('id') id: string,
+    ): Promise<ApiResponseType> {
+        await this.usersService.removeEmergencyContact(user.sub, id);
+        return {
+            status: 'success',
+            message: 'Emergency contact deleted successfully',
         };
     }
 }

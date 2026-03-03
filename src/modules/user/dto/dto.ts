@@ -5,17 +5,11 @@ import {
     IntersectionType,
 } from '@nestjs/swagger';
 import { Prisma, CredentialStatus } from '@prisma/client';
-import {
-    IsEmail,
-    IsEnum,
-    IsNotEmpty,
-    IsOptional,
-    IsString,
-} from 'class-validator';
+import { IsEnum, IsOptional } from 'class-validator';
 import { HasMimeType, IsFile, MaxFileSize, StoredFile } from 'nestjs-form-data';
 import { PaginatedQuery } from '@/util/dto';
 import { DeviceInfoDto } from '@/modules/auth/dto/auth.dto';
-import { User } from '../entities/user.entity';
+import { EmergencyContact, User } from '@/modules/user/entities/user.entity';
 
 export class CreateUserDto
     extends IntersectionType(
@@ -53,3 +47,14 @@ export class GetAllUsersDto extends PaginatedQuery {
     })
     credentialStatus?: CredentialStatus;
 }
+
+export class CreateEmergencyContactDto extends PickType(EmergencyContact, [
+    'firstName',
+    'lastName',
+    'phone',
+    'relationship',
+] as const) {}
+
+export class UpdateEmergencyContactDto extends PartialType(
+    CreateEmergencyContactDto,
+) {}
