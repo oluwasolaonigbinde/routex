@@ -1,5 +1,6 @@
 // import { MediaField } from '@/decorators/storage';
 import { BaseUserEntity } from '@/modules/auth/entities/auth.entity';
+import { RouteEntity } from '@/modules/booking/entities/route.entity';
 import { ApiResponse } from '@/types';
 import { ExposeAll } from '@/util/decorator';
 import { PaginatedResponse } from '@/util/dto';
@@ -325,4 +326,83 @@ export class EmergencyContactListApiResponse implements PaginatedResponse<Emerge
     @ApiProperty({ type: EmergencyContactListResult })
     @Type(() => EmergencyContactListResult)
     data: EmergencyContactListResult;
+}
+
+// ========== FavoriteRoute ==========
+
+export class FavoriteRoute {
+    @ApiProperty({ type: String })
+    @IsUUID()
+    id: string;
+
+    @ApiProperty({ type: String })
+    @IsUUID()
+    userId: string;
+
+    @ApiProperty({ type: String })
+    @IsUUID()
+    routeId: string;
+
+    @ApiProperty({ type: Date })
+    createdAt: Date;
+}
+
+@ExposeAll()
+export class FavoriteRouteEntity extends PickType(FavoriteRoute, [
+    'id',
+    'userId',
+    'routeId',
+    'createdAt',
+] as const) {
+    @ApiProperty({ type: RouteEntity, required: false })
+    @Type(() => RouteEntity)
+    route?: RouteEntity;
+}
+
+@ExposeAll()
+export class FavoriteRouteApiResponse implements ApiResponse<FavoriteRouteEntity> {
+    @ApiProperty({ type: String })
+    status: 'pending' | 'success' | 'failed';
+
+    @ApiProperty({ type: String })
+    message: string;
+
+    @ApiProperty({ type: FavoriteRouteEntity })
+    @Type(() => FavoriteRouteEntity)
+    data: FavoriteRouteEntity;
+}
+
+type FavoriteRoutePaginatedResponse =
+    PaginatedResponse<FavoriteRouteEntity>['data'];
+
+@ExposeAll()
+class FavoriteRouteListResult implements FavoriteRoutePaginatedResponse {
+    @ApiProperty({ type: Number })
+    totalCount: number;
+
+    @ApiProperty({ type: Number })
+    page: number;
+
+    @ApiProperty({ type: Number })
+    limit: number;
+
+    @ApiProperty({ type: Number })
+    perPage: number;
+
+    @ApiProperty({ type: [FavoriteRouteEntity] })
+    @Type(() => FavoriteRouteEntity)
+    results: FavoriteRouteEntity[];
+}
+
+@ExposeAll()
+export class FavoriteRouteListApiResponse implements PaginatedResponse<FavoriteRouteEntity> {
+    @ApiProperty({ type: String })
+    status: 'pending' | 'success' | 'failed';
+
+    @ApiProperty({ type: String })
+    message: string;
+
+    @ApiProperty({ type: FavoriteRouteListResult })
+    @Type(() => FavoriteRouteListResult)
+    data: FavoriteRouteListResult;
 }

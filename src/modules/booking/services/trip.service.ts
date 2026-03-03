@@ -16,6 +16,8 @@ export class TripService {
         const { page, limit } = filters;
         const skip = (page - 1) * limit;
 
+        // TODO: Factor in the start and end location of the trip
+
         const where: Prisma.TripWhereInput = {
             ...(filters.startLocationId && {
                 tripStopStatuses: {
@@ -64,7 +66,7 @@ export class TripService {
                     },
                 },
                 orderBy: {
-                    departureTime: 'asc',
+                    departureTime: 'desc',
                 },
                 skip,
                 take: limit,

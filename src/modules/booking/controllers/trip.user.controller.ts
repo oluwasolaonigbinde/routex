@@ -13,7 +13,6 @@ import {
     TripEntityApiResponse,
     TripListApiResponse,
 } from '@/modules/booking/entities/trip.entity';
-import { SearchTripsDto } from '@/modules/booking/dto/trip.dto';
 import { Tenant } from '@/modules/auth/decorators/tenant.decorator';
 import { TripUserService } from '@/modules/booking/services/trip.user.service';
 import { UserSearchTripsDto } from '@/modules/booking/dto/trip.user.dto';

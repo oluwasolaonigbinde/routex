@@ -43,6 +43,7 @@ model User {
     transactions             Transaction[]
     cards                    Card[]
     emergencyContacts        EmergencyContact[]
+    favoriteRoutes           FavoriteRoute[]
 }
 
 model Admin {
@@ -208,9 +209,10 @@ model Route {
     startLocation        Location @relation("RouteStart", fields: [startLocationId], references: [id])
     endLocation          Location @relation("RouteEnd", fields: [endLocationId], references: [id])
 
-    trips         Trip[]
-    routeStops    RouteStop[]
-    tripSchedules TripSchedule[]
+    trips          Trip[]
+    routeStops     RouteStop[]
+    tripSchedules  TripSchedule[]
+    favoriteRoutes FavoriteRoute[]
 }
 
 model RouteStop {
@@ -505,6 +507,19 @@ model EmergencyContact {
 
     user User @relation(fields: [userId], references: [id])
 
+    @@index([userId])
+}
+
+model FavoriteRoute {
+    id        String   @id @default(uuid())
+    userId    String   @map("user_id")
+    routeId   String   @map("route_id")
+    createdAt DateTime @default(now()) @map("created_at")
+
+    user  User  @relation(fields: [userId], references: [id])
+    route Route @relation(fields: [routeId], references: [id])
+
+    @@unique([userId, routeId])
     @@index([userId])
 }
 

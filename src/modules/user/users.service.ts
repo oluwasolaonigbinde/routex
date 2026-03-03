@@ -35,7 +35,7 @@ import {
 import { UserCreatedEvent } from '@/modules/user/events/user-created.event';
 import { UserPasswordResetRequestedEvent } from '@/modules/user/events/user-password-reset-requested.event';
 import { UserPasswordChangedEvent } from '@/modules/user/events/user-password-changed.event';
-import { EmergencyContactNotFoundException } from '@/modules/user/exceptions/emergency-contact';
+import { EmergencyContactNotFoundException } from '@/modules/user/exceptions/exception';
 
 @Injectable()
 export class UsersService extends AbstractAuthService {
@@ -405,10 +405,10 @@ export class UsersService extends AbstractAuthService {
 
     private async findEmergencyContactOrFail(userId: string, id: string) {
         const contact = await this.database.emergencyContact.findUnique({
-            where: { id },
+            where: { id, deletedAt: null, userId },
         });
 
-        if (!contact || contact.userId !== userId || contact.deletedAt) {
+        if (!contact) {
             throw new EmergencyContactNotFoundException(id);
         }
 

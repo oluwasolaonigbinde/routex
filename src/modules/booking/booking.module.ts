@@ -22,6 +22,8 @@ import { WalletModule } from '@/modules/wallet/wallet.module';
 import { PaymentModule } from '@/modules/payment/payment.module';
 import { TripDriverService } from '@/modules/booking/services/trip.driver.service';
 import { BookingCronService } from '@/modules/booking/services/booking-cron.service';
+import { RouteUserService } from '@/modules/booking/services/route.user.service';
+import { RouteUserController } from '@/modules/booking/controllers/route.user.controller';
 
 @Module({
     imports: [UsersModule, DriverModule, WalletModule, PaymentModule],
@@ -33,6 +35,7 @@ import { BookingCronService } from '@/modules/booking/services/booking-cron.serv
         RouteAdminController,
         PaymentWebhookController,
         DriverTripsController,
+        RouteUserController,
     ],
     providers: [
         // Services
@@ -50,6 +53,7 @@ import { BookingCronService } from '@/modules/booking/services/booking-cron.serv
         TripCronService,
         // Guards
         BookingOwnershipGuard,
+        RouteUserService,
     ],
     exports: [
         BookingService,
