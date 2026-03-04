@@ -15,6 +15,7 @@ import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { TripStatus, RecurrencePattern, StopStatus } from '@prisma/client';
 import { Type } from 'class-transformer';
 import { PaginatedQuery } from '@/util/dto';
+import { IsDateFormat } from '@/util/validators';
 
 export class CreateTripScheduleDto {
     @ApiProperty({ example: 'uuid', description: 'Route ID' })
@@ -34,14 +35,6 @@ export class CreateTripScheduleDto {
         message: 'departureTime must be in HH:mm format',
     })
     departureTime: string;
-
-    @ApiProperty({
-        example: 120,
-        description: 'Estimated arrival time offset in minutes',
-    })
-    @IsInt()
-    @Min(0)
-    arrivalOffsetMin: number;
 
     @ApiProperty({
         example: '2026-02-20',
@@ -181,6 +174,11 @@ export class SearchSchedulesDto extends PaginatedQuery {
     @IsOptional()
     endLocationId?: string;
 
+    @ApiProperty({ type: String, description: 'Route ID' })
+    @IsUUID()
+    @IsOptional()
+    routeId?: string;
+
     @ApiPropertyOptional({
         example: '2026-03-01',
         description:
@@ -201,6 +199,25 @@ export class SearchTripsDto extends PaginatedQuery {
     @IsUUID()
     @IsOptional()
     endLocationId?: string;
+
+    @ApiPropertyOptional({ example: 'uuid', description: 'Route ID' })
+    @IsUUID()
+    @IsOptional()
+    routeId?: string;
+
+    @ApiProperty({ type: String, description: 'Schedule ID', required: false })
+    @IsUUID()
+    @IsOptional()
+    scheduleId?: string;
+
+    @ApiProperty({
+        type: String,
+        description: 'Departure date in YYYY-MM-DD format',
+        required: false,
+    })
+    @IsDateFormat('Schedule date must be in YYYY-MM-DD format')
+    @IsOptional()
+    scheduleDate?: string;
 
     @ApiPropertyOptional({
         type: Date,
@@ -228,7 +245,6 @@ export class SearchTripsDto extends PaginatedQuery {
     @IsOptional()
     driverId?: string;
 }
-
 export class SearchPassengerTripsDto extends PaginatedQuery {
     @ApiPropertyOptional({ example: 'uuid', description: 'Driver ID' })
     @IsUUID()

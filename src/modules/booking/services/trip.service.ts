@@ -1,10 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '@/modules/database/database.service';
-import { Prisma, Trip } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { PaginatedResponse } from '@/types';
 import { SearchTripsDto } from '@/modules/booking/dto/trip.dto';
-import { TripWithStopsInclude } from '@/modules/booking/types';
+import {
+    TripEmbedInclude,
+    TripWithStopsInclude,
+} from '@/modules/booking/types';
 import { TripNotFoundException } from '@/modules/booking/exceptions/trip.exception';
+import {
+    TripEmbedEntity,
+    TripEntity,
+} from '@/modules/booking/entities/trip.entity';
 
 @Injectable()
 export class TripService {
@@ -12,32 +19,40 @@ export class TripService {
 
     async searchTrips(
         filters: SearchTripsDto,
-    ): Promise<PaginatedResponse<Trip>['data']> {
+    ): Promise<PaginatedResponse<TripEmbedEntity>['data']> {
         const { page, limit } = filters;
         const skip = (page - 1) * limit;
 
-        // TODO: Factor in the start and end location of the trip
-
         const where: Prisma.TripWhereInput = {
             ...(filters.startLocationId && {
-                tripStopStatuses: {
-                    some: {
-                        stopId: filters.startLocationId,
-                        role: {
-                            in: ['PICKUP_ONLY', 'PICKUP_AND_DROPOFF'],
+                OR: [
+                    { startLocationId: filters.startLocationId },
+                    {
+                        tripStopStatuses: {
+                            some: {
+                                stopId: filters.startLocationId,
+                                role: {
+                                    in: ['PICKUP_ONLY', 'PICKUP_AND_DROPOFF'],
+                                },
+                            },
                         },
                     },
-                },
+                ],
             }),
             ...(filters.endLocationId && {
-                tripStopStatuses: {
-                    some: {
-                        stopId: filters.endLocationId,
-                        role: {
-                            in: ['DROPOFF_ONLY', 'PICKUP_AND_DROPOFF'],
+                OR: [
+                    { endLocationId: filters.endLocationId },
+                    {
+                        tripStopStatuses: {
+                            some: {
+                                stopId: filters.endLocationId,
+                                role: {
+                                    in: ['DROPOFF_ONLY', 'PICKUP_AND_DROPOFF'],
+                                },
+                            },
                         },
                     },
-                },
+                ],
             }),
             ...(filters.minDate && {
                 departureTime: {
@@ -51,23 +66,20 @@ export class TripService {
                 },
             }),
             status: filters.status,
+            tripScheduleDate: filters?.scheduleDate
+                ? new Date(filters.scheduleDate)
+                : undefined,
+            tripScheduleId: filters?.scheduleId,
         };
 
         const [trips, totalCount] = await Promise.all([
             this.db.trip.findMany({
                 where: where,
-                include: {
-                    vehicle: true,
-                    route: {
-                        include: {
-                            startLocation: true,
-                            endLocation: true,
-                        },
-                    },
-                },
+                include: TripEmbedInclude,
                 orderBy: {
                     departureTime: 'desc',
                 },
+
                 skip,
                 take: limit,
             }),
@@ -78,12 +90,15 @@ export class TripService {
             totalCount,
             page,
             limit,
-            results: trips,
+            results: trips.map((trip) => ({
+                ...trip,
+                numStops: trip._count.tripStopStatuses,
+            })),
             perPage: trips.length,
         };
     }
 
-    async getTripById(id: string): Promise<Trip> {
+    async getTripById(id: string): Promise<TripEntity> {
         const trip = await this.db.trip.findUnique({
             where: { id },
             include: TripWithStopsInclude,
@@ -93,6 +108,6 @@ export class TripService {
             throw new TripNotFoundException(id);
         }
 
-        return trip;
+        return { ...trip, numStops: trip.tripStopStatuses.length };
     }
 }

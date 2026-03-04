@@ -100,21 +100,24 @@ export class RouteEntity extends PickType(Route, [
     'distanceKm',
     'estimatedDurationMin',
 ] as const) {
-    @ApiProperty({ type: LocationEntity, required: false })
+    @ApiProperty({ type: LocationEntity })
     @Type(() => LocationEntity)
-    startLocation?: LocationEntity;
+    startLocation: LocationEntity;
 
-    @ApiProperty({ type: LocationEntity, required: false })
+    @ApiProperty({ type: LocationEntity })
     @Type(() => LocationEntity)
-    endLocation?: LocationEntity;
+    endLocation: LocationEntity;
 
-    @ApiProperty({ type: [RouteStopEntity], required: false })
+    @ApiProperty({ type: [RouteStopEntity] })
     @Type(() => RouteStopEntity)
-    routeStops?: RouteStopEntity[];
+    routeStops: RouteStopEntity[];
+
+    @ApiProperty({ type: Number, description: 'Number of stops on the route' })
+    numStops: number;
 }
 
 @ExposeAll()
-export class RouteWithoutStopsEntity extends PickType(Route, [
+export class RouteEmbedEntity extends PickType(RouteEntity, [
     'id',
     'code',
     'startLocationId',
@@ -122,15 +125,9 @@ export class RouteWithoutStopsEntity extends PickType(Route, [
     'basePrice',
     'distanceKm',
     'estimatedDurationMin',
-] as const) {
-    @ApiProperty({ type: LocationEntity, required: false })
-    @Type(() => LocationEntity)
-    startLocation?: LocationEntity;
-
-    @ApiProperty({ type: LocationEntity, required: false })
-    @Type(() => LocationEntity)
-    endLocation?: LocationEntity;
-}
+    'startLocation',
+    'endLocation',
+] as const) {}
 
 // ========== ApiResponse Wrappers ==========
 
@@ -138,7 +135,7 @@ export class RouteWithoutStopsEntity extends PickType(Route, [
 export class LocationEntityApiResponse implements ApiResponse<LocationEntity> {
     @ApiProperty({
         type: String,
-        enum: ['pending', 'success', 'failed', 'processing'],
+        enum: ['pending', 'succes   s', 'failed', 'processing'],
     })
     status: 'pending' | 'success' | 'failed' | 'processing';
 
@@ -209,9 +206,9 @@ class PaginatedRouteResult {
     @ApiProperty({ type: Number })
     limit: number;
 
-    @ApiProperty({ type: [RouteEntity] })
-    @Type(() => RouteEntity)
-    results: RouteEntity[];
+    @ApiProperty({ type: [RouteEmbedEntity] })
+    @Type(() => RouteEmbedEntity)
+    results: RouteEmbedEntity[];
 }
 
 @ExposeAll()
@@ -227,7 +224,7 @@ export class RouteListApiResponse implements ApiResponse<PaginatedRouteResult> {
 
     @ApiProperty({ type: PaginatedRouteResult })
     @Type(() => PaginatedRouteResult)
-    data?: PaginatedRouteResult;
+    data: PaginatedRouteResult;
 }
 
 @ExposeAll()

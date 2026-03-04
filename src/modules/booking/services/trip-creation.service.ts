@@ -16,6 +16,7 @@ import {
     TripNotBookableException,
     TripScheduleNotFoundException,
 } from '@/modules/booking/exceptions/trip.exception';
+import { TripEntity } from '@/modules/booking/entities/trip.entity';
 
 @Injectable()
 export class TripCreationService {
@@ -91,6 +92,8 @@ export class TripCreationService {
             create: {
                 code: tripCode,
                 routeId: schedule.routeId,
+                startLocationId: schedule.route.startLocationId,
+                endLocationId: schedule.route.endLocationId,
                 vehicleId: schedule.vehicleId,
                 departureTime: departureDateTime,
                 boardingOpensAt: this.getBoardingOpensAt(departureDateTime),
@@ -153,7 +156,6 @@ export class TripCreationService {
         }
 
         const dayOfWeek = serviceDate.getDay();
-        console.log('kd', dayOfWeek);
         if (
             schedule.recurrence === RecurrencePattern.WEEKLY &&
             !schedule.daysOfWeek.includes(dayOfWeek)
@@ -195,7 +197,7 @@ export class TripCreationService {
     /**
      * Create an ad-hoc trip (not based on a schedule)
      */
-    async createAdHocTrip(dto: CreateAdHocTripDto): Promise<Trip> {
+    async createAdHocTrip(dto: CreateAdHocTripDto): Promise<TripEntity> {
         this.logger.log(`Creating ad-hoc trip for route ${dto.routeId}`);
 
         const [route, vehicle] = await Promise.all([
@@ -244,6 +246,8 @@ export class TripCreationService {
                 code: tripCode,
                 routeId: dto.routeId,
                 vehicleId: dto.vehicleId,
+                startLocationId: route.startLocationId,
+                endLocationId: route.endLocationId,
                 driverId: dto.driverId,
                 departureTime: dto.departureDate,
                 boardingOpensAt: this.getBoardingOpensAt(dto.departureDate),
@@ -264,7 +268,7 @@ export class TripCreationService {
 
         this.logger.log(`Ad-hoc trip created with stop statuses: ${trip.id}`);
 
-        return trip;
+        return { ...trip, numStops: trip.tripStopStatuses.length };
     }
 
     /**

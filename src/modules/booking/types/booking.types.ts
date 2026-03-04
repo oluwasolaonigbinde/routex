@@ -1,4 +1,4 @@
-import { TripWithStopsInclude } from '@/modules/booking/types/trip.types';
+import { TripEmbedInclude } from '@/modules/booking/types/trip.types';
 import { Prisma } from '@prisma/client';
 
 /**
@@ -15,10 +15,10 @@ export const BookingWithDetailsInclude = {
         },
     },
     outboundTrip: {
-        include: TripWithStopsInclude,
+        include: TripEmbedInclude,
     },
     returnTrip: {
-        include: TripWithStopsInclude,
+        include: TripEmbedInclude,
     },
 } satisfies Prisma.BookingInclude;
 

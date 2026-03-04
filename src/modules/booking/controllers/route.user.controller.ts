@@ -1,5 +1,11 @@
 import { UserToken } from '@/decorators/user';
 import { Tenant } from '@/modules/auth/decorators/tenant.decorator';
+import { GetLocationsDto, GetRoutesDto } from '@/modules/booking/dto/route.dto';
+import {
+    LocationListApiResponse,
+    RouteEntityApiResponse,
+    RouteListApiResponse,
+} from '@/modules/booking/entities/route.entity';
 import { RouteUserService } from '@/modules/booking/services/route.user.service';
 import {
     FavoriteRouteApiResponse,
@@ -31,6 +37,65 @@ import {
 @Controller('routes')
 export class RouteUserController {
     constructor(private readonly routeService: RouteUserService) {}
+
+    @Get('locations')
+    @ApiOperation({ summary: 'List all locations' })
+    @ApiResponse({
+        status: 200,
+        description: 'List of locations',
+        type: LocationListApiResponse,
+    })
+    @SerializeOptions({ type: LocationListApiResponse, strategy: 'excludeAll' })
+    async listLocations(
+        @Query() query: GetLocationsDto,
+    ): Promise<LocationListApiResponse> {
+        const data = await this.routeService.listLocations(query);
+
+        return {
+            status: 'success',
+            message: 'Locations retrieved successfully',
+            data,
+        };
+    }
+
+    @Get('')
+    @ApiOperation({ summary: 'List all routes' })
+    @ApiResponse({
+        status: 200,
+        description: 'List of routes',
+        type: RouteListApiResponse,
+    })
+    @SerializeOptions({ type: RouteListApiResponse, strategy: 'excludeAll' })
+    async listRoutes(
+        @Query() query: GetRoutesDto,
+    ): Promise<RouteListApiResponse> {
+        const data = await this.routeService.listRoutes(query);
+
+        return {
+            status: 'success',
+            message: 'Routes retrieved successfully',
+            data,
+        };
+    }
+
+    @Get('/:id')
+    @ApiOperation({ summary: 'Get route by ID' })
+    @ApiResponse({
+        status: 200,
+        description: 'Route details',
+        type: RouteEntityApiResponse,
+    })
+    @SerializeOptions({ type: RouteEntityApiResponse, strategy: 'excludeAll' })
+    async getRoute(@Param('id') id: string): Promise<RouteEntityApiResponse> {
+        const data = await this.routeService.getRoute(id);
+
+        return {
+            status: 'success',
+            message: 'Route retrieved successfully',
+            data,
+        };
+    }
+
     // ========== Favorite Routes ==========
 
     @Post('/favorites/:routeId')
@@ -58,7 +123,7 @@ export class RouteUserController {
         };
     }
 
-    @Delete('favorites/:routeId')
+    @Delete('/favorites/:routeId')
     @HttpCode(HttpStatus.OK)
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Unfavorite a route' })
@@ -74,7 +139,7 @@ export class RouteUserController {
         };
     }
 
-    @Get('favorites')
+    @Get('/favorites')
     @HttpCode(HttpStatus.OK)
     @ApiBearerAuth()
     @ApiOperation({ summary: 'List favorite routes' })

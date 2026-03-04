@@ -15,6 +15,10 @@ import {
     UpdateVehicleDto,
 } from '@/modules/booking/dto/route.dto';
 import { PaginatedResponse } from '@/types';
+import {
+    RouteEmbedEntity,
+    RouteEntity,
+} from '@/modules/booking/entities/route.entity';
 
 @Injectable()
 export class RouteService {
@@ -159,8 +163,8 @@ export class RouteService {
         },
     };
 
-    async createRoute(dto: CreateRouteDto) {
-        return this.db.route.create({
+    async createRoute(dto: CreateRouteDto): Promise<RouteEntity> {
+        const route = await this.db.route.create({
             data: {
                 code: dto.code,
                 startLocationId: dto.startLocationId,
@@ -172,11 +176,19 @@ export class RouteService {
             include: {
                 startLocation: true,
                 endLocation: true,
+                routeStops: {
+                    include: { stop: true },
+                    orderBy: { sequence: 'asc' as const },
+                },
             },
         });
+
+        return { ...route, numStops: route.routeStops.length };
     }
 
-    async listRoutes(query: GetRoutesDto) {
+    async listRoutes(
+        query: GetRoutesDto,
+    ): Promise<PaginatedResponse<RouteEmbedEntity>['data']> {
         const { page, limit } = query;
         const skip = (page - 1) * limit;
 
@@ -190,7 +202,7 @@ export class RouteService {
             where.endLocationId = query.endLocationId;
         }
 
-        const [results, totalCount] = await Promise.all([
+        const [routes, totalCount] = await Promise.all([
             this.db.route.findMany({
                 where,
                 skip,
@@ -201,7 +213,12 @@ export class RouteService {
             this.db.route.count({ where }),
         ]);
 
-        return { totalCount, page, limit, results };
+        const results = routes.map((r) => ({
+            ...r,
+            numStops: r.routeStops.length,
+        }));
+
+        return { totalCount, page, limit, results, perPage: results.length };
     }
 
     async getRoute(id: string) {
@@ -214,17 +231,19 @@ export class RouteService {
             throw new NotFoundException(`Route with ID ${id} not found`);
         }
 
-        return route;
+        return { ...route, numStops: route.routeStops.length };
     }
 
     async updateRoute(id: string, dto: UpdateRouteDto) {
         await this.getRoute(id);
 
-        return this.db.route.update({
+        const route = await this.db.route.update({
             where: { id },
             data: dto,
             include: this.routeIncludes,
         });
+
+        return { ...route, numStops: route.routeStops.length };
     }
 
     async deleteRoute(id: string) {

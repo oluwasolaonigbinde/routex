@@ -17,21 +17,9 @@ import {
 import { Tenant } from '@/modules/auth/decorators/tenant.decorator';
 import { RolesRequired } from '@/modules/auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
-import { RouteService } from '../services/route.service';
-import {
-    CreateLocationDto,
-    UpdateLocationDto,
-    CreateVehicleDto,
-    UpdateVehicleDto,
-    CreateRouteDto,
-    UpdateRouteDto,
-    CreateRouteStopDto,
-    UpdateRouteStopDto,
-    GetLocationsDto,
-    GetVehiclesDto,
-    GetRoutesDto,
-} from '../dto/route.dto';
+
 import { SerializeOptions } from '@/util/decorator';
+import { RouteService } from '@/modules/booking/services/route.service';
 import {
     LocationEntityApiResponse,
     LocationListApiResponse,
@@ -39,11 +27,24 @@ import {
     RouteListApiResponse,
     RouteStopEntityApiResponse,
     RouteStopListApiResponse,
-} from '../entities/route.entity';
+} from '@/modules/booking/entities/route.entity';
+import {
+    CreateLocationDto,
+    CreateRouteDto,
+    CreateRouteStopDto,
+    CreateVehicleDto,
+    GetLocationsDto,
+    GetRoutesDto,
+    GetVehiclesDto,
+    UpdateLocationDto,
+    UpdateRouteDto,
+    UpdateRouteStopDto,
+    UpdateVehicleDto,
+} from '@/modules/booking/dto/route.dto';
 import {
     VehicleEntityApiResponse,
     VehicleListApiResponse,
-} from '../entities/vehicle.entity';
+} from '@/modules/booking/entities/vehicle.entity';
 
 @ApiTags('Admin Routes Management')
 @ApiBearerAuth()
@@ -51,7 +52,7 @@ import {
 @Tenant('ADMIN')
 @RolesRequired(Role.ADMIN, Role.SUPERADMIN)
 export class RouteAdminController {
-    constructor(private readonly routeAdminService: RouteService) {}
+    constructor(private readonly routeService: RouteService) {}
 
     // ========== LOCATIONS ==========
 
@@ -69,7 +70,7 @@ export class RouteAdminController {
     async createLocation(
         @Body() dto: CreateLocationDto,
     ): Promise<LocationEntityApiResponse> {
-        const data = await this.routeAdminService.createLocation(dto);
+        const data = await this.routeService.createLocation(dto);
 
         return {
             status: 'success',
@@ -89,7 +90,7 @@ export class RouteAdminController {
     async listLocations(
         @Query() query: GetLocationsDto,
     ): Promise<LocationListApiResponse> {
-        const data = await this.routeAdminService.listLocations(query);
+        const data = await this.routeService.listLocations(query);
 
         return {
             status: 'success',
@@ -112,7 +113,7 @@ export class RouteAdminController {
     async getLocation(
         @Param('id') id: string,
     ): Promise<LocationEntityApiResponse> {
-        const data = await this.routeAdminService.getLocation(id);
+        const data = await this.routeService.getLocation(id);
 
         return {
             status: 'success',
@@ -136,7 +137,7 @@ export class RouteAdminController {
         @Param('id') id: string,
         @Body() dto: UpdateLocationDto,
     ): Promise<LocationEntityApiResponse> {
-        const data = await this.routeAdminService.updateLocation(id, dto);
+        const data = await this.routeService.updateLocation(id, dto);
 
         return {
             status: 'success',
@@ -152,7 +153,7 @@ export class RouteAdminController {
         description: 'Location deleted successfully',
     })
     async deleteLocation(@Param('id') id: string) {
-        await this.routeAdminService.deleteLocation(id);
+        await this.routeService.deleteLocation(id);
 
         return {
             status: 'success',
@@ -176,7 +177,7 @@ export class RouteAdminController {
     async createVehicle(
         @Body() dto: CreateVehicleDto,
     ): Promise<VehicleEntityApiResponse> {
-        const data = await this.routeAdminService.createVehicle(dto);
+        const data = await this.routeService.createVehicle(dto);
 
         return {
             status: 'success',
@@ -196,7 +197,7 @@ export class RouteAdminController {
     async listVehicles(
         @Query() query: GetVehiclesDto,
     ): Promise<VehicleListApiResponse> {
-        const data = await this.routeAdminService.listVehicles(query);
+        const data = await this.routeService.listVehicles(query);
 
         return {
             status: 'success',
@@ -219,7 +220,7 @@ export class RouteAdminController {
     async getVehicle(
         @Param('id') id: string,
     ): Promise<VehicleEntityApiResponse> {
-        const data = await this.routeAdminService.getVehicle(id);
+        const data = await this.routeService.getVehicle(id);
 
         return {
             status: 'success',
@@ -243,7 +244,7 @@ export class RouteAdminController {
         @Param('id') id: string,
         @Body() dto: UpdateVehicleDto,
     ): Promise<VehicleEntityApiResponse> {
-        const data = await this.routeAdminService.updateVehicle(id, dto);
+        const data = await this.routeService.updateVehicle(id, dto);
 
         return {
             status: 'success',
@@ -259,7 +260,7 @@ export class RouteAdminController {
         description: 'Vehicle deleted successfully',
     })
     async deleteVehicle(@Param('id') id: string) {
-        await this.routeAdminService.deleteVehicle(id);
+        await this.routeService.deleteVehicle(id);
 
         return {
             status: 'success',
@@ -280,7 +281,7 @@ export class RouteAdminController {
     async createRoute(
         @Body() dto: CreateRouteDto,
     ): Promise<RouteEntityApiResponse> {
-        const data = await this.routeAdminService.createRoute(dto);
+        const data = await this.routeService.createRoute(dto);
 
         return {
             status: 'success',
@@ -300,7 +301,7 @@ export class RouteAdminController {
     async listRoutes(
         @Query() query: GetRoutesDto,
     ): Promise<RouteListApiResponse> {
-        const data = await this.routeAdminService.listRoutes(query);
+        const data = await this.routeService.listRoutes(query);
 
         return {
             status: 'success',
@@ -318,7 +319,7 @@ export class RouteAdminController {
     })
     @SerializeOptions({ type: RouteEntityApiResponse, strategy: 'excludeAll' })
     async getRoute(@Param('id') id: string): Promise<RouteEntityApiResponse> {
-        const data = await this.routeAdminService.getRoute(id);
+        const data = await this.routeService.getRoute(id);
 
         return {
             status: 'success',
@@ -339,7 +340,7 @@ export class RouteAdminController {
         @Param('id') id: string,
         @Body() dto: UpdateRouteDto,
     ): Promise<RouteEntityApiResponse> {
-        const data = await this.routeAdminService.updateRoute(id, dto);
+        const data = await this.routeService.updateRoute(id, dto);
 
         return {
             status: 'success',
@@ -355,7 +356,7 @@ export class RouteAdminController {
         description: 'Route deleted successfully',
     })
     async deleteRoute(@Param('id') id: string) {
-        await this.routeAdminService.deleteRoute(id);
+        await this.routeService.deleteRoute(id);
 
         return {
             status: 'success',
@@ -380,7 +381,7 @@ export class RouteAdminController {
         @Param('routeId') routeId: string,
         @Body() dto: CreateRouteStopDto,
     ): Promise<RouteStopEntityApiResponse> {
-        const data = await this.routeAdminService.createRouteStop(routeId, dto);
+        const data = await this.routeService.createRouteStop(routeId, dto);
 
         return {
             status: 'success',
@@ -403,7 +404,7 @@ export class RouteAdminController {
     async listRouteStops(
         @Param('routeId') routeId: string,
     ): Promise<RouteStopListApiResponse> {
-        const data = await this.routeAdminService.listRouteStops(routeId);
+        const data = await this.routeService.listRouteStops(routeId);
 
         return {
             status: 'success',
@@ -428,7 +429,7 @@ export class RouteAdminController {
         @Param('stopId') stopId: string,
         @Body() dto: UpdateRouteStopDto,
     ): Promise<RouteStopEntityApiResponse> {
-        const data = await this.routeAdminService.updateRouteStop(stopId, dto);
+        const data = await this.routeService.updateRouteStop(stopId, dto);
 
         return {
             status: 'success',
@@ -447,7 +448,7 @@ export class RouteAdminController {
         @Param('routeId') routeId: string,
         @Param('stopId') stopId: string,
     ) {
-        await this.routeAdminService.deleteRouteStop(stopId);
+        await this.routeService.deleteRouteStop(stopId);
 
         return {
             status: 'success',

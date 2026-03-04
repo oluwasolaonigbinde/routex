@@ -7,15 +7,15 @@ import {
     HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { TripScheduleService } from '../services/trip-schedule.service';
-import { SearchSchedulesDto } from '../dto/trip.dto';
 import { SerializeOptions } from '@/util/decorator';
+import { PaginatedResponse } from '@/types';
+import { TripSchedule } from '@prisma/client';
+import { TripScheduleService } from '@/modules/booking/services/trip-schedule.service';
 import {
     ScheduleListApiResponse,
     TripScheduleEntityApiResponse,
-} from '../entities/schedule.entity';
-import { PaginatedResponse } from '@/types';
-import { TripSchedule } from '@prisma/client';
+} from '@/modules/booking/entities/schedule.entity';
+import { SearchSchedulesDto } from '@/modules/booking/dto/trip.dto';
 
 @Controller('trips/schedules')
 @ApiTags('Trip Schedules')

@@ -1,9 +1,12 @@
+import { GetLocationsDto, GetRoutesDto } from '@/modules/booking/dto/route.dto';
 import { RouteService } from '@/modules/booking/services/route.service';
 import { DatabaseService } from '@/modules/database/database.service';
+import { FavoriteRouteEntity } from '@/modules/user/entities/user.entity';
 import {
     FavoriteRouteAlreadyExistsException,
     FavoriteRouteNotFoundException,
 } from '@/modules/user/exceptions/exception';
+import { PaginatedResponse } from '@/types';
 import { PaginatedQuery } from '@/util/dto';
 import { Injectable } from '@nestjs/common';
 
@@ -13,9 +16,15 @@ export class RouteUserService {
         private readonly database: DatabaseService,
         private readonly routeService: RouteService,
     ) {}
+    async listLocations(query: GetLocationsDto) {
+        return this.routeService.listLocations(query);
+    }
     // ========== Favorite Routes ==========
 
-    async favoriteRoute(userId: string, routeId: string) {
+    async favoriteRoute(
+        userId: string,
+        routeId: string,
+    ): Promise<FavoriteRouteEntity> {
         await this.routeService.getRoute(routeId);
 
         const existing = await this.database.favoriteRoute.findUnique({
@@ -26,12 +35,14 @@ export class RouteUserService {
             throw new FavoriteRouteAlreadyExistsException(routeId);
         }
 
-        return this.database.favoriteRoute.create({
+        const favoriteRoute = await this.database.favoriteRoute.create({
             data: { userId, routeId },
             include: {
                 route: { include: { startLocation: true, endLocation: true } },
             },
         });
+
+        return favoriteRoute;
     }
 
     async unfavoriteRoute(userId: string, routeId: string) {
@@ -50,7 +61,10 @@ export class RouteUserService {
         });
     }
 
-    async getFavoriteRoutes(userId: string, query: PaginatedQuery) {
+    async getFavoriteRoutes(
+        userId: string,
+        query: PaginatedQuery,
+    ): Promise<PaginatedResponse<FavoriteRouteEntity>['data']> {
         const { page, limit } = query;
         const skip = (page - 1) * limit;
 
@@ -72,5 +86,13 @@ export class RouteUserService {
         ]);
 
         return { totalCount, page, limit, results, perPage: results.length };
+    }
+
+    async listRoutes(query: GetRoutesDto) {
+        return this.routeService.listRoutes(query);
+    }
+
+    async getRoute(id: string) {
+        return this.routeService.getRoute(id);
     }
 }

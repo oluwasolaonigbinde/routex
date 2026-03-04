@@ -1,6 +1,5 @@
-// import { MediaField } from '@/decorators/storage';
 import { BaseUserEntity } from '@/modules/auth/entities/auth.entity';
-import { RouteEntity } from '@/modules/booking/entities/route.entity';
+import { RouteEmbedEntity } from '@/modules/booking/entities/route.entity';
 import { ApiResponse } from '@/types';
 import { ExposeAll } from '@/util/decorator';
 import { PaginatedResponse } from '@/util/dto';
@@ -354,9 +353,9 @@ export class FavoriteRouteEntity extends PickType(FavoriteRoute, [
     'routeId',
     'createdAt',
 ] as const) {
-    @ApiProperty({ type: RouteEntity, required: false })
-    @Type(() => RouteEntity)
-    route?: RouteEntity;
+    @ApiProperty({ type: RouteEmbedEntity })
+    @Type(() => RouteEmbedEntity)
+    route: RouteEmbedEntity;
 }
 
 @ExposeAll()

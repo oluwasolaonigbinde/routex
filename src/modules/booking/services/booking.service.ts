@@ -7,7 +7,6 @@ import {
     TripStatus,
     BookingStatus,
     PassengerTrip,
-    Booking,
     StopRole,
 } from '@prisma/client';
 import { nanoid } from 'nanoid';
@@ -31,8 +30,8 @@ import {
     InvalidStopException,
 } from '@/modules/booking/exceptions/booking.exception';
 import {
-    BookingWithDetails,
     BookingWithDetailsInclude,
+    TripEmbedInclude,
 } from '@/modules/booking/types';
 import {
     BookingCancelledEvent,
@@ -44,8 +43,12 @@ import {
     TripNotFoundException,
 } from '@/modules/booking/exceptions/trip.exception';
 import { addDays, addHours, addMinutes, format } from 'date-fns';
-import { PaymentChannel } from '@/modules/payment/types/payment';
 import { TransactionIntentsToEventMap } from '@/modules/payment/transaction-intent';
+import {
+    BookingEmbedEntity,
+    BookingEntity,
+    CreateBookingData,
+} from '@/modules/booking/entities/booking.entity';
 
 @Injectable()
 export class BookingService {
@@ -106,7 +109,7 @@ export class BookingService {
     private async createBooking(
         userId: string,
         params: CreateBookingDto,
-    ): Promise<{ booking: Booking; payment: PaymentChannel }> {
+    ): Promise<CreateBookingData> {
         const {
             outboundTripId,
             returnTripId,
@@ -129,11 +132,13 @@ export class BookingService {
                         const outboundTrip = await tx.trip.findUnique({
                             where: { id: outboundTripId },
                             include: {
-                                route: {
+                                route: true,
+                                tripStopStatuses: {
                                     include: {
-                                        routeStops: true,
-                                        endLocation: true,
-                                        startLocation: true,
+                                        stop: true,
+                                    },
+                                    orderBy: {
+                                        sequence: 'asc',
                                     },
                                 },
                             },
@@ -171,9 +176,9 @@ export class BookingService {
 
                         // Validate boarding and alighting stops
                         this.validateStops(
-                            outboundTrip.route.routeStops,
-                            outboundTrip.route.startLocationId,
-                            outboundTrip.route.endLocationId,
+                            outboundTrip.tripStopStatuses,
+                            outboundTrip.startLocationId,
+                            outboundTrip.endLocationId,
                             boardingStopId,
                             alightingStopId,
                         );
@@ -367,11 +372,11 @@ export class BookingService {
                         bookingId: result.booking.id,
                         description: `Payment for 
                                     ${result.booking.returnTrip ? 'outbound trip' : ''} ${result.booking.outboundTrip.code} from 
-                                    ${result.booking.outboundTrip.route.startLocation.name} to ${result.booking.outboundTrip.route.endLocation.name} on ${format(result.booking.outboundTrip.departureTime, 'EEEE yyyy-MM-dd')}
+                                    ${result.booking.outboundTrip.startLocation.name} to ${result.booking.outboundTrip.endLocation.name} on ${format(result.booking.outboundTrip.departureTime, 'EEEE yyyy-MM-dd')}
                                    ${
                                        result.booking.returnTrip
-                                           ? `and return trip ${result.booking.returnTrip.code} from ${result.booking.returnTrip.route.startLocation.name} to 
-                                             ${result.booking.returnTrip.route.endLocation.name} on ${format(result.booking.returnTrip.departureTime, 'EEEE yyyy-MM-dd')}`
+                                           ? `and return trip ${result.booking.returnTrip.code} from ${result.booking.returnTrip.startLocation.name} to 
+                                             ${result.booking.returnTrip.endLocation.name} on ${format(result.booking.returnTrip.departureTime, 'EEEE yyyy-MM-dd')}`
                                            : ''
                                    } for ${passengers.length} passenger(s)
                                     `
@@ -410,7 +415,23 @@ export class BookingService {
                 );
 
                 return {
-                    booking: result.booking,
+                    booking: {
+                        ...result.booking,
+                        outboundTrip: {
+                            ...result.booking.outboundTrip,
+                            numStops:
+                                result.booking.outboundTrip._count
+                                    .tripStopStatuses,
+                        },
+                        returnTrip: result.booking.returnTrip
+                            ? {
+                                  ...result.booking.returnTrip,
+                                  numStops:
+                                      result.booking.returnTrip._count
+                                          .tripStopStatuses,
+                              }
+                            : null,
+                    },
                     payment: payment,
                 };
             } catch (error) {
@@ -733,12 +754,12 @@ export class BookingService {
     }
 
     /**
-     * Get user bookings with pagination
+     * Get bookings with pagination
      */
-    async getUserBookings(
+    async getBookings(
         userId: string,
         query: GetBookingsQueryDto,
-    ): Promise<PaginatedResponse<Booking>['data']> {
+    ): Promise<PaginatedResponse<BookingEmbedEntity>['data']> {
         const { page, limit, status, tripStatus } = query;
         const skip = (page - 1) * limit;
 
@@ -759,12 +780,15 @@ export class BookingService {
                 skip,
                 take: limit,
                 include: {
-                    outboundTrip: true,
-                    returnTrip: true,
+                    outboundTrip: {
+                        include: TripEmbedInclude,
+                    },
+                    returnTrip: {
+                        include: TripEmbedInclude,
+                    },
                 },
                 orderBy: {
                     outboundTrip: { departureTime: 'asc' },
-                    returnTrip: { departureTime: 'asc' },
                 },
             }),
             this.db.booking.count({ where }),
@@ -774,7 +798,19 @@ export class BookingService {
             totalCount,
             page,
             limit,
-            results: bookings,
+            results: bookings.map((b) => ({
+                ...b,
+                outboundTrip: {
+                    ...b.outboundTrip,
+                    numStops: b.outboundTrip._count.tripStopStatuses,
+                },
+                returnTrip: b.returnTrip
+                    ? {
+                          ...b.returnTrip,
+                          numStops: b.returnTrip._count.tripStopStatuses,
+                      }
+                    : null,
+            })),
             perPage: bookings.length,
         };
     }
@@ -782,7 +818,7 @@ export class BookingService {
     /**
      * Get booking details by ID
      */
-    async getBookingById(bookingId: string): Promise<BookingWithDetails> {
+    async getBookingById(bookingId: string): Promise<BookingEntity> {
         const booking = await this.db.booking.findUnique({
             where: { id: bookingId },
             include: BookingWithDetailsInclude,
@@ -792,7 +828,19 @@ export class BookingService {
             throw new BookingNotFoundException(bookingId);
         }
 
-        return booking;
+        return {
+            ...booking,
+            outboundTrip: {
+                ...booking.outboundTrip,
+                numStops: booking.outboundTrip._count.tripStopStatuses,
+            },
+            returnTrip: booking.returnTrip
+                ? {
+                      ...booking.returnTrip,
+                      numStops: booking.returnTrip._count.tripStopStatuses,
+                  }
+                : null,
+        };
     }
 
     /**

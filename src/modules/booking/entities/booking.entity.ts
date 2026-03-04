@@ -8,13 +8,13 @@ import {
     PassengerTripEntity,
     UserBookingPassengerEntity,
 } from '@/modules/booking/entities/passenger.entity';
-import { TripEntity } from '@/modules/booking/entities/trip.entity';
 import {
     CardChannelEntity,
     InstantTransferChannelEntity,
     PaymentChannelEntity,
     WalletChannelEntity,
 } from '@/modules/wallet/entities/wallet.entity';
+import { UserTripEmbedEntity } from '@/modules/booking/entities/trip.user.entity';
 
 // ========== Base Entities ==========
 
@@ -82,18 +82,36 @@ export class BookingEntity extends PickType(Booking, [
     'status',
     'createdAt',
 ] as const) {
-    @ApiProperty({ type: [UserBookingPassengerEntity], required: false })
+    @ApiProperty({ type: [UserBookingPassengerEntity] })
     @Type(() => UserBookingPassengerEntity)
-    passengers?: UserBookingPassengerEntity[];
+    passengers: UserBookingPassengerEntity[];
 
-    @ApiProperty({ type: TripEntity, required: false })
-    @Type(() => TripEntity)
-    outboundTrip?: TripEntity;
+    @ApiProperty({ type: UserTripEmbedEntity })
+    @Type(() => UserTripEmbedEntity)
+    outboundTrip: UserTripEmbedEntity;
 
-    @ApiProperty({ type: TripEntity, required: false })
-    @Type(() => TripEntity)
-    returnTrip?: TripEntity;
+    @ApiProperty({ type: UserTripEmbedEntity, nullable: true })
+    @Type(() => UserTripEmbedEntity)
+    returnTrip: UserTripEmbedEntity | null;
 }
+
+export class BookingEmbedEntity extends PickType(BookingEntity, [
+    'id',
+    'userId',
+    'outboundTripId',
+    'returnTripId',
+    'totalPrice',
+    'pricePerSeat',
+    'boardingStopId',
+    'alightingStopId',
+    'reservationExpiresAt',
+    'paidAt',
+    'cancellationFee',
+    'status',
+    'createdAt',
+    'outboundTrip',
+    'returnTrip',
+] as const) {}
 
 // ========== ApiResponse Wrappers ==========
 
@@ -114,7 +132,7 @@ export class BookingEntityApiResponse implements ApiResponse<BookingEntity> {
 }
 
 @ExposeAll()
-class CreateBookingData {
+export class CreateBookingData {
     @ApiProperty({ type: BookingEntity })
     @Type(() => BookingEntity)
     booking: BookingEntity;
@@ -199,7 +217,7 @@ export class CreateBookingApiResponse implements ApiResponse<CreateBookingData> 
     data?: CreateBookingData;
 }
 
-type BookingPaginatedResponse = PaginatedResponse<BookingEntity>['data'];
+type BookingPaginatedResponse = PaginatedResponse<BookingEmbedEntity>['data'];
 
 @ExposeAll()
 class BookingListResult implements BookingPaginatedResponse {
@@ -215,13 +233,16 @@ class BookingListResult implements BookingPaginatedResponse {
     @ApiProperty({ type: Number })
     perPage: number;
 
-    @ApiProperty({ type: [BookingEntity], description: 'List of bookings' })
-    @Type(() => BookingEntity)
-    results: BookingEntity[];
+    @ApiProperty({
+        type: [BookingEmbedEntity],
+        description: 'List of bookings',
+    })
+    @Type(() => BookingEmbedEntity)
+    results: BookingEmbedEntity[];
 }
 
 @ExposeAll()
-export class BookingListApiResponse implements PaginatedResponse<BookingEntity> {
+export class BookingListApiResponse implements PaginatedResponse<BookingEmbedEntity> {
     @ApiProperty({
         type: String,
         enum: ['pending', 'success', 'failed', 'processing'],

@@ -1,5 +1,18 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 
+export class TripDriverNotAvailableException extends HttpException {
+    constructor() {
+        super(
+            {
+                status: 'failed',
+                message:
+                    'Driver information is not available for this trip at the moment. Please try again later.',
+            },
+            HttpStatus.NOT_FOUND,
+        );
+    }
+}
+
 export class TripNotFoundException extends HttpException {
     constructor(tripId?: string) {
         super(

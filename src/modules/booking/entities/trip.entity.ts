@@ -15,11 +15,10 @@ import { ApiResponse, PaginatedResponse } from '@/types';
 import { IsEnum, IsNumber, IsUUID } from 'class-validator';
 import {
     LocationEntity,
+    RouteEmbedEntity,
     RouteEntity,
-    RouteWithoutStopsEntity,
 } from '@/modules/booking/entities/route.entity';
 import { VehicleEntity } from '@/modules/booking/entities/vehicle.entity';
-import { PassengerTripEntity } from '@/modules/booking/entities/passenger.entity';
 
 export class TripSchedule implements PrismaTripSchedule {
     @ApiProperty({ type: String })
@@ -33,9 +32,6 @@ export class TripSchedule implements PrismaTripSchedule {
 
     @ApiProperty({ type: String })
     departureTime: string;
-
-    @ApiProperty({ type: Number })
-    arrivalOffsetMin: number;
 
     @ApiProperty({ type: Date })
     startDate: Date;
@@ -58,20 +54,15 @@ export class TripScheduleEntity extends PickType(TripSchedule, [
     'routeId',
     'vehicleId',
     'departureTime',
-    'arrivalOffsetMin',
     'startDate',
     'endDate',
     'recurrence',
     'daysOfWeek',
     'isActive',
 ] as const) {
-    @ApiProperty({ type: RouteEntity, required: false })
-    @Type(() => RouteEntity)
-    route?: RouteEntity;
-
-    @ApiProperty({ type: VehicleEntity, required: false })
+    @ApiProperty({ type: VehicleEntity })
     @Type(() => VehicleEntity)
-    vehicle?: VehicleEntity;
+    vehicle: VehicleEntity;
 }
 
 export class TripStopStatus implements PrismaTripStopStatus {
@@ -138,6 +129,14 @@ export class Trip implements PrismaTrip {
     @ApiProperty({ type: String, nullable: true })
     driverId: string | null;
 
+    @ApiProperty({ type: String })
+    @IsUUID()
+    startLocationId: string;
+
+    @ApiProperty({ type: String })
+    @IsUUID()
+    endLocationId: string;
+
     @ApiProperty({ type: Date })
     departureTime: Date;
 
@@ -166,10 +165,10 @@ export class Trip implements PrismaTrip {
 
 @ExposeAll()
 export class TripEntity extends PickType(Trip, [
-    'availableSeats',
-    'code',
-    'departureTime',
     'id',
+    'code',
+    'availableSeats',
+    'departureTime',
     'priceOverride',
     'boardingOpensAt',
     'routeId',
@@ -177,24 +176,62 @@ export class TripEntity extends PickType(Trip, [
     'tripScheduleDate',
     'tripScheduleId',
     'vehicleId',
+    'startLocationId',
+    'endLocationId',
     'driverId',
 ] as const) {
-    @ApiProperty({ type: VehicleEntity, required: false })
+    @ApiProperty({ type: VehicleEntity })
     @Type(() => VehicleEntity)
-    vehicle?: VehicleEntity;
+    vehicle: VehicleEntity;
 
-    @ApiProperty({ type: DriverEmbedEntity, required: false, nullable: true })
+    @ApiProperty({ type: Number, description: 'Number of stops in the trip' })
+    @IsNumber()
+    numStops: number;
+
+    @ApiProperty({ type: DriverEmbedEntity, nullable: true })
     @Type(() => DriverEmbedEntity)
-    driver?: DriverEmbedEntity | null;
+    driver: DriverEmbedEntity | null;
 
-    @ApiProperty({ type: RouteWithoutStopsEntity, required: false })
-    @Type(() => RouteWithoutStopsEntity)
-    route?: RouteWithoutStopsEntity;
+    @ApiProperty({ type: RouteEmbedEntity })
+    @Type(() => RouteEmbedEntity)
+    route: RouteEmbedEntity;
+
+    @ApiProperty({ type: LocationEntity })
+    @Type(() => LocationEntity)
+    startLocation: LocationEntity;
+
+    @ApiProperty({ type: LocationEntity })
+    @Type(() => LocationEntity)
+    endLocation: LocationEntity;
 
     @ApiProperty({ type: [TripStopStatusEntity], required: false })
     @Type(() => TripStopStatusEntity)
-    tripStopStatuses?: TripStopStatusEntity[];
+    tripStopStatuses: TripStopStatusEntity[];
 }
+
+export class TripEmbedEntity extends PickType(TripEntity, [
+    'id',
+    'code',
+    'availableSeats',
+    'departureTime',
+    'priceOverride',
+    'boardingOpensAt',
+    'routeId',
+    'status',
+    'tripScheduleDate',
+    'tripScheduleId',
+    'vehicleId',
+    'startLocationId',
+    'endLocationId',
+    'driverId',
+    'vehicle',
+    'numStops',
+    'driver',
+    'startLocation',
+    'endLocation',
+    'route',
+    'routeId',
+] as const) {}
 
 // ========== ApiResponse Wrappers ==========
 
@@ -214,7 +251,7 @@ export class TripEntityApiResponse implements ApiResponse<TripEntity> {
     data?: TripEntity;
 }
 
-type TripPaginatedResponse = PaginatedResponse<TripEntity>['data'];
+type TripPaginatedResponse = PaginatedResponse<TripEmbedEntity>['data'];
 @ExposeAll()
 class TripListResult implements TripPaginatedResponse {
     @ApiProperty({ type: Number })
@@ -229,13 +266,13 @@ class TripListResult implements TripPaginatedResponse {
     @ApiProperty({ type: Number })
     perPage: number;
 
-    @ApiProperty({ type: [TripEntity], description: 'List of trips' })
-    @Type(() => TripEntity)
-    results: TripEntity[];
+    @ApiProperty({ type: [TripEmbedEntity], description: 'List of trips' })
+    @Type(() => TripEmbedEntity)
+    results: TripEmbedEntity[];
 }
 
 @ExposeAll()
-export class TripListApiResponse implements PaginatedResponse<TripEntity> {
+export class TripListApiResponse implements PaginatedResponse<TripEmbedEntity> {
     @ApiProperty({
         type: String,
         enum: ['pending', 'success', 'failed', 'processing'],

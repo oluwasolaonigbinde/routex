@@ -9,4 +9,6 @@ export class UserSearchTripsDto extends PickType(SearchTripsDto, [
     'endLocationId',
     'minDate',
     'maxDate',
+    'scheduleId',
+    'scheduleDate',
 ] as const) {}

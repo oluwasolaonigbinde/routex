@@ -14,8 +14,6 @@ import { Tenant } from '@/modules/auth/decorators/tenant.decorator';
 import type { AccessTokenDTO } from '@/types/auth';
 import { UserToken } from '@/decorators/user';
 import { SerializeOptions } from '@/util/decorator';
-import { PaginatedResponse } from '@/types';
-import { Booking } from '@prisma/client';
 import { BookingService } from '@/modules/booking/services/booking.service';
 import {
     BookingEntityApiResponse,
@@ -112,11 +110,8 @@ export class BookingController {
     async getUserBookings(
         @UserToken() user: AccessTokenDTO,
         @Query() query: GetBookingsQueryDto,
-    ): Promise<PaginatedResponse<Booking>> {
-        const bookings = await this.bookingService.getUserBookings(
-            user.sub,
-            query,
-        );
+    ): Promise<BookingListApiResponse> {
+        const bookings = await this.bookingService.getBookings(user.sub, query);
 
         return {
             status: 'success',

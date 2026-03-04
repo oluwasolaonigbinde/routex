@@ -6,7 +6,11 @@ import { TripStatus, StopStatus } from '@prisma/client';
 import { DriverService } from '@/modules/driver/driver.service';
 import { BookingEvent } from '@/modules/booking/types/event';
 import { TripWithStopsInclude } from '@/modules/booking/types';
-import { Trip, TripStopStatus } from '@/modules/booking/entities/trip.entity';
+import {
+    Trip,
+    TripEntity,
+    TripStopStatus,
+} from '@/modules/booking/entities/trip.entity';
 import {
     DriverNotAssignedException,
     InvalidBoardingTokenException,
@@ -59,7 +63,10 @@ export class TripExecutionService {
      * Compute the start window boundaries for a trip.
      * Uses the stored boardingOpensAt when available, otherwise computes from config.
      */
-    getWindow(trip: Trip): { opens: Date; closes: Date } {
+    getWindow(trip: Pick<Trip, 'boardingOpensAt' | 'departureTime'>): {
+        opens: Date;
+        closes: Date;
+    } {
         const beforeMin =
             this.configService.get<number>('TRIP_START_WINDOW_BEFORE_MIN') ??
             30;
@@ -78,7 +85,9 @@ export class TripExecutionService {
     /**
      * Check whether the current time falls within the trip's start window
      */
-    isWithinStartWindow(trip: Trip): boolean {
+    isWithinStartWindow(
+        trip: Pick<Trip, 'boardingOpensAt' | 'departureTime'>,
+    ): boolean {
         const { opens, closes } = this.getWindow(trip);
         const now = new Date();
         return now >= opens && now <= closes;
@@ -87,7 +96,7 @@ export class TripExecutionService {
     /**
      * Assign a driver to a trip
      */
-    async assignDriver(tripId: string, driverId: string): Promise<Trip> {
+    async assignDriver(tripId: string, driverId: string): Promise<TripEntity> {
         this.logger.log(`Assigning driver ${driverId} to trip ${tripId}`);
 
         // Verify driver exists and has DRIVER tenant
@@ -124,7 +133,7 @@ export class TripExecutionService {
             new DriverAssignedEvent(tripId, driverId, trip.code),
         );
 
-        return trip;
+        return { ...trip, numStops: trip.tripStopStatuses.length };
     }
 
     /**
@@ -134,7 +143,7 @@ export class TripExecutionService {
         tripId: string,
         newStatus: TripStatus,
         driverId?: string,
-    ): Promise<Trip> {
+    ): Promise<TripEntity> {
         this.logger.log(`Updating trip ${tripId} status to ${newStatus}`);
 
         const trip = await this.db.trip.findUnique({
@@ -176,6 +185,11 @@ export class TripExecutionService {
             include: TripWithStopsInclude,
         });
 
+        const updatedTripWithCount = {
+            ...updatedTrip,
+            numStops: updatedTrip.tripStopStatuses.length,
+        };
+
         // Emit appropriate events
         switch (newStatus) {
             case TripStatus.BOARDING:
@@ -202,7 +216,7 @@ export class TripExecutionService {
                 break;
         }
 
-        return updatedTrip;
+        return updatedTripWithCount;
     }
 
     /**

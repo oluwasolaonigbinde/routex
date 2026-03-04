@@ -13,6 +13,7 @@ import {
 } from '@/modules/booking/exceptions/booking.exception';
 import { TripScheduleCreatedEvent } from '@/modules/booking/events/trip.events';
 import { TripScheduleNotFoundException } from '@/modules/booking/exceptions/trip.exception';
+import { TripScheduleEntity } from '@/modules/booking/entities/trip.entity';
 
 @Injectable()
 export class TripScheduleService {
@@ -72,9 +73,15 @@ export class TripScheduleService {
     /**
      * Update a trip schedule
      */
-    async updateTripSchedule(scheduleId: string, dto: UpdateTripScheduleDto) {
+    async updateTripSchedule(
+        scheduleId: string,
+        dto: UpdateTripScheduleDto,
+    ): Promise<TripScheduleEntity> {
         const schedule = await this.db.tripSchedule.findUnique({
             where: { id: scheduleId },
+            include: {
+                vehicle: true,
+            },
         });
 
         if (!schedule) {
@@ -84,6 +91,9 @@ export class TripScheduleService {
         return this.db.tripSchedule.update({
             where: { id: scheduleId },
             data: dto,
+            include: {
+                vehicle: true,
+            },
         });
     }
 
@@ -144,6 +154,8 @@ export class TripScheduleService {
                     create: {
                         code: tripCode,
                         routeId: schedule.routeId,
+                        startLocationId: schedule.route.startLocationId,
+                        endLocationId: schedule.route.endLocationId,
                         vehicleId: schedule.vehicleId,
                         departureTime: departureDateTime,
                         availableSeats: schedule.vehicle.totalSeats,
@@ -157,7 +169,7 @@ export class TripScheduleService {
                 createdCount++;
             } catch (error) {
                 this.logger.warn(
-                    `Failed to create trip for ${serviceDate.toISOString()}: ${error.message}`,
+                    `Failed to create trip for ${serviceDate.toISOString()}: ${(error as Error).message}`,
                 );
             }
         }
@@ -226,20 +238,11 @@ export class TripScheduleService {
 
         const where: Prisma.TripScheduleWhereInput = {
             isActive: true,
-            ...(dto.startLocationId && {
-                route: {
-                    startLocationId: dto.startLocationId,
-                    ...(dto.endLocationId && {
-                        endLocationId: dto.endLocationId,
-                    }),
-                },
-            }),
-            ...(!dto.startLocationId &&
-                dto.endLocationId && {
-                    route: {
-                        endLocationId: dto.endLocationId,
-                    },
-                }),
+            route: {
+                startLocationId: dto.startLocationId,
+                endLocationId: dto.endLocationId,
+            },
+            routeId: dto.routeId,
         };
 
         // If a specific date is provided, filter by date range and daysOfWeek
@@ -265,7 +268,6 @@ export class TripScheduleService {
                     },
                     vehicle: true,
                 },
-                orderBy: { departureTime: 'asc' },
                 skip,
                 take: limit,
             }),

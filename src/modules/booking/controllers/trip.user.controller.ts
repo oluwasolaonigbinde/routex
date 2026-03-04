@@ -7,24 +7,21 @@ import {
     HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { DatabaseService } from '@/modules/database/database.service';
 import { SerializeOptions } from '@/util/decorator';
-import {
-    TripEntityApiResponse,
-    TripListApiResponse,
-} from '@/modules/booking/entities/trip.entity';
+import { DriverEmbedEntityApiResponse } from '@/modules/driver/entities/driver.entity';
 import { Tenant } from '@/modules/auth/decorators/tenant.decorator';
 import { TripUserService } from '@/modules/booking/services/trip.user.service';
 import { UserSearchTripsDto } from '@/modules/booking/dto/trip.user.dto';
+import {
+    UserTripEntityApiResponse,
+    UserTripListApiResponse,
+} from '@/modules/booking/entities/trip.user.entity';
 
 @Controller('trips')
 @ApiTags('Trips')
 @Tenant('USER')
 export class TripController {
-    constructor(
-        private readonly db: DatabaseService,
-        private readonly tripService: TripUserService,
-    ) {}
+    constructor(private readonly tripService: TripUserService) {}
 
     @Get('search')
     @HttpCode(HttpStatus.OK)
@@ -32,9 +29,9 @@ export class TripController {
     @ApiResponse({
         status: 200,
         description: 'Trips found successfully',
-        type: TripListApiResponse,
+        type: UserTripListApiResponse,
     })
-    @SerializeOptions({ type: TripListApiResponse, strategy: 'excludeAll' })
+    @SerializeOptions({ type: UserTripListApiResponse, strategy: 'excludeAll' })
     async searchTrips(@Query() query: UserSearchTripsDto) {
         const trips = await this.tripService.searchTrips(query);
 
@@ -51,16 +48,50 @@ export class TripController {
     @ApiResponse({
         status: 200,
         description: 'Trip retrieved successfully',
-        type: TripEntityApiResponse,
+        type: UserTripEntityApiResponse,
     })
-    @SerializeOptions({ type: TripEntityApiResponse, strategy: 'excludeAll' })
-    async getTripById(@Param('id') id: string): Promise<TripEntityApiResponse> {
+    @SerializeOptions({
+        type: UserTripEntityApiResponse,
+        strategy: 'excludeAll',
+    })
+    async getTripById(
+        @Param('id') id: string,
+    ): Promise<UserTripEntityApiResponse> {
         const trip = await this.tripService.getTripById(id);
 
         return {
             status: 'success',
             message: 'Trip retrieved successfully',
             data: trip,
+        };
+    }
+
+    @Get(':id/driver')
+    @HttpCode(HttpStatus.OK)
+    @ApiOperation({ summary: 'Get the driver assigned to a trip' })
+    @ApiResponse({
+        status: 200,
+        description: 'Driver retrieved successfully',
+        type: DriverEmbedEntityApiResponse,
+    })
+    @ApiResponse({
+        status: 404,
+        description:
+            'Driver information is only available from the boarding window onwards',
+    })
+    @SerializeOptions({
+        type: DriverEmbedEntityApiResponse,
+        strategy: 'excludeAll',
+    })
+    async getTripDriver(
+        @Param('id') id: string,
+    ): Promise<DriverEmbedEntityApiResponse> {
+        const driver = await this.tripService.getTripDriver(id);
+
+        return {
+            status: 'success',
+            message: 'Driver retrieved successfully',
+            data: driver,
         };
     }
 }
